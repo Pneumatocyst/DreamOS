@@ -55,6 +55,30 @@ int  gfx_text(struct surface *s, int x, int y, const char *str, uint32_t fg, int
 void gfx_text_scaled(struct surface *s, int x, int y, const char *str, int scale, uint32_t c, int alpha);
 int  gfx_text_width(const char *str);
 
+/* ---- the modern bits (gfx/ui.c) ------------------------------------------------------- */
+
+/* Rounded rectangles that can be see-through and shaded top to bottom. */
+void gfx_round_ex(struct surface *s, int x, int y, int w, int h, int r, uint32_t top, uint32_t bottom, int alpha);
+void gfx_round_a(struct surface *s, int x, int y, int w, int h, int r, uint32_t c, int alpha);
+void gfx_ring(struct surface *s, int x, int y, int w, int h, int r, uint32_t c, int alpha);   /* 1px outline */
+/* A soft shadow around a rounded rectangle: darkest at the edge, fading over `spread` px. */
+void gfx_shadow(struct surface *s, struct rect box, int r, int spread, int dy, int alpha);
+/* Blur a part of a surface in place (three box blurs ~ a gaussian). For frosted glass. */
+void gfx_blur(struct surface *s, struct rect area, int radius);
+
+/* Smooth (anti-aliased) proportional text, from Inter rendered at fixed sizes by
+   tools/mkfont.py. y is the top of the line; the functions return the x where
+   the text ended. */
+struct uiglyph { uint8_t w, h; int8_t xoff, yoff; uint16_t adv; uint32_t off; };
+struct uifont  { int16_t height, ascent; const struct uiglyph *g; const uint8_t *bits; };
+extern const struct uifont font_ui, font_bold, font_small, font_title, font_big, font_display;
+
+int  gfx_utext(struct surface *s, const struct uifont *f, int x, int y, const char *str, uint32_t c);
+int  gfx_utext_width(const struct uifont *f, const char *str);
+void gfx_utext_center(struct surface *s, const struct uifont *f, int cx, int y, const char *str, uint32_t c);
+/* Like gfx_utext, but cut short with "..." if it would be wider than maxw. */
+int  gfx_utext_fit(struct surface *s, const struct uifont *f, int x, int y, const char *str, uint32_t c, int maxw);
+
 /* copying */
 void gfx_blit(struct surface *dst, int dx, int dy, struct surface *src, int sx, int sy, int w, int h);
 void gfx_cursor(struct surface *s, int x, int y);   /* the mouse pointer */
