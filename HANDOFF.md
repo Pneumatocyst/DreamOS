@@ -63,9 +63,9 @@ make clean      # removes build/ and the ISO (keeps disk.img)
 
 `tools/qemu_drive.py script.txt outdir/` boots the ISO headless with a scratch disk and plays
 a script (`wait`, `type`, `key`, `mouse`, `click`, `down`/`up`, `shot`); see docs/BUILDING.md.
-Gotchas: keys go to the **focused window** (`key ctrl-alt-t` refocuses the terminal); QEMU drops
-or scales big mouse moves, so the script moves in 40 px steps, and you should park the mouse
-with `mouse -2000 -2000` before moves you need to be exact; overshoot when dragging to an edge.
+It talks QMP and sends absolute pointer positions (`move x y`), which dream's vmmouse driver
+turns into exact screen pixels. Gotcha: keys go to the **focused window** (`key ctrl-alt-t`
+refocuses the terminal).
 The scratch disk persists settings between runs in the same outdir: delete `scratch.img` for
 a clean boot.
 
@@ -200,3 +200,10 @@ Known rough edges after 0.2:
 - One notes window at a time (the app keeps its state in statics, like the other apps).
 - The original `edit` (text-mode editor) still exists; on the desktop, files opens notes instead.
 - The wallpaper is rebuilt on every theme change (~100 ms at 1280x800).
+
+After that, Lynwood reported "I can't control it" on the laptop (QEMU's GTK window on
+Hyprland): relative PS/2 needs pointer capture, which is unreliable on Wayland. Fix:
+`drivers/mouse.c` now speaks the VMware/QEMU **vmmouse** backdoor (port 0x5658) for absolute
+positions; QEMU raises a dummy PS/2 packet as the interrupt, and the driver drains the
+vmmouse queue instead. Falls back to PS/2 elsewhere. F1 also opens the launcher because
+Hyprland may keep the super key. The `dreamos` command (`make install`) launches the VM.

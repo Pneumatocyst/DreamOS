@@ -13,5 +13,6 @@ struct mouse_event {
 void mouse_init(void);              /* call with interrupts off */
 bool mouse_present(void);
 bool mouse_has_wheel(void);
+bool mouse_absolute(void);          /* the VM tells us where the pointer is (no capturing) */
 bool mouse_poll(struct mouse_event *e);    /* next event, false if none */
 void mouse_where(int *x, int *y);

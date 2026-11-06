@@ -1276,7 +1276,8 @@ static void handle_key(int k) {
         damage_all();
         return;
     }
-    if (k == KEY_SUPER) { if (launcher) close_launcher(); else open_launcher(); return; }
+    /* super opens the launcher; so does f1, for hosts that keep the super key for themselves */
+    if (k == KEY_SUPER || k == KEY_F1) { if (launcher) close_launcher(); else open_launcher(); return; }
     if (launcher) {
         size_t n = strlen(query);
         if (k == 27) close_launcher();

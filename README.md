@@ -33,7 +33,9 @@ sudo pacman -S --needed gcc make limine qemu-desktop libisoburn edk2-ovmf
 
 On Debian/Ubuntu, and for more detail, see [docs/BUILDING.md](docs/BUILDING.md).
 
-In the QEMU window, click to give dream the mouse; **Ctrl+Alt+G** takes it back.
+The mouse just works: dream speaks QEMU's "vmmouse" protocol, so your pointer slides in
+and out of the VM window without being captured. (On other emulators it falls back to a
+plain PS/2 mouse: click the window to capture it, **Ctrl+Alt+G** to let go.)
 
 ## What's in it (v0.2)
 
@@ -70,7 +72,8 @@ monitor (CPU/memory graphs and tasks), settings, clock, snake.
 - **Shell** with pipes `|`, redirects `>` `>>`, `;`, `&&`, quotes and history. About
   50 commands: `ls cd cat grep head tail wc tree cp mv rm ps kill free date uname fetch`...
   and desktop ones like `open`, `notify`, `lock`, `theme`, `wallpaper`
-- **Drivers**: framebuffer (double buffered), PS/2 keyboard and mouse (with wheel),
+- **Drivers**: framebuffer (double buffered), PS/2 keyboard and mouse (with wheel), the VMware/QEMU
+  absolute "vmmouse" (no pointer capture in VMs),
   CMOS clock, serial port
 - A red **panic screen** with a register dump
 
@@ -78,7 +81,7 @@ monitor (CPU/memory graphs and tasks), settings, clock, snake.
 
 | keys | does |
 |---|---|
-| super | open the launcher |
+| super or f1 | open the launcher |
 | alt + tab | switch windows |
 | alt + f4 | close the window |
 | f11 | maximize / restore |

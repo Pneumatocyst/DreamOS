@@ -104,20 +104,23 @@ A script looks like this:
 wait 6                      # seconds (boot + desktop takes about 5)
 type open files\n           # type text; \n is enter
 key alt-tab                 # any QEMU key name: ret, esc, f11, meta_l, ctrl-alt-t...
-mouse -2000 -2000           # move the mouse (relative); this parks it in the top-left
-mouse 640 400
+move 1257 15                # put the pointer exactly here (screen pixels)
 click                       # or: click right
+move 300 88
 down                        # hold the left button...
-mouse 300 0
+mouse 300 0                 # ...move relative to where it is...
 up                          # ...and let go (a drag)
 shot desktop                # writes out/desktop.png
 ```
 
+It drives QEMU through QMP (its JSON control socket) and sends absolute pointer
+positions, the same way QEMU's window does when dream's vmmouse driver is active, so
+clicks land exactly where you say.
+
 Things to know:
 
 - keys go to the **focused window**. `ctrl-alt-t` brings the terminal back to the front.
-- simulated mouse movement drifts a little; park the mouse in a corner first (as above)
-  for positions you can rely on, and prefer keyboard shortcuts.
+- settings saved during a run stay on `out/scratch.img`; delete it for a fresh boot.
 - the serial log ends up in `out/serial.log`.
 
 Screenshots need ImageMagick (`convert`) to turn QEMU's PPM files into PNGs.

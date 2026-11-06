@@ -6,11 +6,21 @@ instead, turn off **settings > desktop > open the desktop when dream starts**, o
 
 ![the desktop](screenshots/desktop.png)
 
+## Mouse and keyboard in the VM
+
+The pointer moves straight into the QEMU window and back out again; nothing needs to be
+captured. Keys go to dream while its window is focused.
+
+Your own desktop may keep some shortcuts for itself (on Hyprland/Omarchy the super key,
+for example), so they never reach dream. Use the alternatives: **f1** for the launcher,
+or the dock and top bar. To send *everything* to dream, press **ctrl+alt+g** in the QEMU
+window (it captures keyboard and mouse); press it again to let go.
+
 ## The top bar
 
 From left to right:
 
-- **the moon**: opens the launcher (so does the super key)
+- **the moon**: opens the launcher (so do the super key and f1)
 - the name of the **window you're using**
 - the **date and time**. Click it for this month's calendar
 - a live **CPU graph** and percentage. Click it to open the monitor
@@ -47,7 +57,7 @@ back from the dock or with **ctrl + alt + t**.
 
 ## The launcher
 
-Press **super** (the Windows key) or click the moon. Start typing to narrow the list.
+Press **super** (the Windows key), **f1**, or click the moon. Start typing to narrow the list.
 The search looks at app names and descriptions, so "game" finds snake and "edit" finds notes.
 **Enter** opens the highlighted app, the **arrow keys** move, **esc** closes.
 

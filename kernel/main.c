@@ -140,7 +140,8 @@ void kmain(void) {
     ok("PIT ticking at 100 Hz");
     ok("scheduler: preemptive, 10 ms time slices");
     ok("PS/2 keyboard listening");
-    if (mouse_present()) ok(mouse_has_wheel() ? "PS/2 mouse ready, with scroll wheel" : "PS/2 mouse ready");
+    if (mouse_present()) ok(mouse_absolute() ? "mouse ready: vmmouse, follows the host pointer (no capture needed)"
+                            : mouse_has_wheel() ? "PS/2 mouse ready, with scroll wheel" : "PS/2 mouse ready");
     else warn("no PS/2 mouse found");
     char m[64];
     snprintf(m, sizeof m, "page allocator: %lu MiB free in 4 KiB pages",
