@@ -2,6 +2,7 @@
 #include "arch/cpu.h"
 #include "arch/io.h"
 #include "mm/heap.h"
+#include "proc/process.h"
 
 #define STACK_SIZE TASK_STACK_SIZE
 
@@ -154,7 +155,7 @@ int task_list(struct task_info *out, int max) {
     struct task *t = &boot_task;
     do {
         if (n < max && t->state != TASK_DEAD) {
-            out[n] = (struct task_info){ t->id, "", t->state, t->ticks };
+            out[n] = (struct task_info){ t->id, "", t->state, t->ticks, t->proc != NULL };
             strlcpy(out[n].name, t->name, sizeof out[n].name);
             n++;
         }
@@ -162,6 +163,22 @@ int task_list(struct task_info *out, int max) {
     } while (t != &boot_task);
     irq_restore(f);
     return n;
+}
+
+int task_kill(int id) {
+    uint64_t f = irq_save();
+    int r = -1;
+    struct task *t = &boot_task;
+    do {
+        if (t->id == id && t->state != TASK_DEAD) {
+            if (t->proc) { t->proc->killed = true; r = 0; }
+            else r = -2;
+            break;
+        }
+        t = t->next;
+    } while (t != &boot_task);
+    irq_restore(f);
+    return r;
 }
 
 /* ---- locks ---------------------------------------------------------------------- */

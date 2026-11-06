@@ -45,6 +45,9 @@ struct mutex { struct task *volatile owner; int depth; };
 void mutex_lock(struct mutex *m);
 void mutex_unlock(struct mutex *m);
 
-struct task_info { int id; char name[16]; enum task_state state; uint64_t ticks; };
+struct task_info { int id; char name[16]; enum task_state state; uint64_t ticks; bool user; };
 int  task_list(struct task_info *out, int max);
+/* Ask a task running a user program to stop (like ctrl+c). 0 = asked, -1 = no such
+   task, -2 = it's a kernel task (those can't be stopped from outside). */
+int  task_kill(int id);
 uint64_t sched_total_ticks(void);

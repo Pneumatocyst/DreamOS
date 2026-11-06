@@ -6,6 +6,7 @@
 script lines:
     wait <seconds>          type <text>         key <qemu-key-name>
     mouse <dx> <dy>         click [left|right]  shot <name>
+    down / up               hold / release the left button (drag)
 Each `shot` writes out_dir/<name>.png. Uses a scratch disk, never disk.img.
 """
 import os, socket, subprocess, sys, time
@@ -56,10 +57,15 @@ def main():
                 for ch in arg.replace('\\n', '\n'): cmd('sendkey ' + keys_for(ch))
             elif op == 'key': cmd('sendkey ' + arg)
             elif op == 'mouse':
-                dx, dy = map(int, arg.split()); cmd(f'mouse_move {dx} {dy}')
+                dx, dy = map(int, arg.split())
+                while dx or dy:                     # PS/2 packets carry small deltas: go in steps
+                    sx = max(-40, min(40, dx)); sy = max(-40, min(40, dy))
+                    cmd(f'mouse_move {sx} {sy}'); dx -= sx; dy -= sy
             elif op == 'click':
                 b = 2 if arg == 'right' else 1
                 cmd(f'mouse_button {b}'); time.sleep(0.1); cmd('mouse_button 0')
+            elif op in ('down', 'up'):             # hold / let go of the left button (for dragging)
+                cmd('mouse_button ' + ('1' if op == 'down' else '0'))
             elif op == 'shot':
                 ppm = os.path.abspath(f'{out}/{arg}.ppm'); cmd(f'screendump {ppm}'); time.sleep(0.4)
                 subprocess.run(['convert', ppm, f'{out}/{arg}.png']); os.remove(ppm)

@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
-#define DREAM_VERSION "0.1"
+#define DREAM_VERSION "0.2"
 
 struct regs;
 
@@ -51,4 +51,6 @@ __attribute__((noreturn)) void panic(const char *msg);
 __attribute__((noreturn)) void panic_exception(struct regs *r);
 
 /* shell/shell.c */
+__attribute__((noreturn)) void power_reboot(void);
+__attribute__((noreturn)) void power_off(void);
 __attribute__((noreturn)) void shell_run(void);

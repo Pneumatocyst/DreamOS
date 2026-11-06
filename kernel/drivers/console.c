@@ -7,6 +7,7 @@
 #include "drivers/fb.h"
 #include "drivers/theme.h"
 #include "arch/cpu.h"
+#include "arch/io.h"
 #include "kernel.h"
 
 #define BAR_H    28
@@ -70,6 +71,27 @@ void con_attach(struct surface *s, bool with_bar) {
     color = PAL_FG;
     escape = false;
     con_clear();
+}
+
+/* Same as con_attach, but keep the text: the terminal window was resized. */
+void con_reattach(struct surface *s) {
+    uint64_t f = irq_save();
+    S = s;
+    int margin = bar ? 20 : 10, vpad = bar ? 10 : 8;
+    cols = (S->w - 2 * margin) / FONT_W;
+    rows = (S->h - oy - vpad) / FONT_H;
+    if (cols > MAX_COLS) cols = MAX_COLS;
+    if (rows > MAX_ROWS) rows = MAX_ROWS;
+    if (rows < 1) rows = 1;
+    if (cy >= rows) {                 /* keep the cursor's line on screen: drop lines off the top */
+        int drop = cy - rows + 1;
+        memmove(grid[0], grid[drop], sizeof(grid[0]) * (MAX_ROWS - drop));
+        for (int r = MAX_ROWS - drop; r < MAX_ROWS; r++)
+            for (int c = 0; c < MAX_COLS; c++) grid[r][c] = (struct cell){ ' ', PAL_FG };
+        cy -= drop;
+    }
+    con_redraw();
+    irq_restore(f);
 }
 
 void con_init(void) { con_attach(fb_screen(), true); }

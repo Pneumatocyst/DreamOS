@@ -23,7 +23,9 @@ static const char map_shift[128] = {
 
 static volatile uint8_t ring[128];
 static volatile unsigned head, tail;
-static bool shift, caps, ctrl, extended;
+static bool shift, caps, ctrl, alt, extended;
+
+bool kbd_alt(void) { return alt; }
 
 static void push(int k) {
     unsigned next = (head + 1) % sizeof ring;
@@ -40,6 +42,7 @@ static void on_key(struct regs *r) {
     if (extended) {
         extended = false;
         if (sc == 0x1d) { ctrl = !released; return; }   /* right ctrl */
+        if (sc == 0x38) { alt = !released; return; }    /* right alt (alt gr) */
         if (released) return;
         switch (sc) {
         case 0x48: push(KEY_UP);    break;
@@ -51,15 +54,25 @@ static void on_key(struct regs *r) {
         case 0x49: push(KEY_PGUP);  break;
         case 0x51: push(KEY_PGDN);  break;
         case 0x53: push(KEY_DEL);   break;
+        case 0x5b: case 0x5c: push(KEY_SUPER); break;   /* left/right "windows" key */
         }
         return;
     }
     switch (sc) {
     case 0x2a: case 0x36: shift = !released; return;
     case 0x1d:            ctrl  = !released; return;
+    case 0x38:            alt   = !released; return;
     case 0x3a:            if (!released) caps = !caps; return;
     }
     if (released) return;
+
+    if (sc >= 0x3b && sc <= 0x44) {                        /* F1..F10 */
+        if (alt && sc == 0x3e) { push(KEY_ALTF4); return; }
+        push(KEY_F1 + sc - 0x3b);
+        return;
+    }
+    if (sc == 0x57 || sc == 0x58) { push(KEY_F1 + 10 + (sc - 0x57)); return; }   /* F11, F12 */
+    if (alt && sc == 0x0f) { push(KEY_ALTTAB); return; }
 
     char c = shift ? map_shift[sc] : map[sc];
     if (!c) return;

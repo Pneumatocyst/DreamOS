@@ -33,7 +33,7 @@ SH_CMD(lsblk); SH_CMD(blkread); SH_CMD(blkwrite); SH_CMD(hexdump); SH_CMD(sync);
 SH_CMD(edit); SH_CMD(paint);
 
 /* gui/wm.c */
-SH_CMD(startx); SH_CMD(exit); SH_CMD(files);
+SH_CMD(startx); SH_CMD(exit); SH_CMD(files); SH_CMD(lock); SH_CMD(notify); SH_CMD(open);
 
 /* shell/cmd_sys.c */
 SH_CMD(uname); SH_CMD(whoami); SH_CMD(hostname); SH_CMD(date); SH_CMD(free);

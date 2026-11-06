@@ -37,7 +37,7 @@ static void draw(struct surface *s) {
     struct rtc_time t;
     rtc_now(&t);
     last_sec = t.sec;
-    uint32_t bg = gfx_mix(theme->bar, theme->bg_top, 100);
+    uint32_t bg = ui(UI_BG);
     gfx_fill(s, 0, 0, s->w, s->h, bg);
 
     gfx_circle(s, CX, CY, R + 4, gfx_mix(bg, theme->pal[PAL_ACCENT], 110));
@@ -57,10 +57,10 @@ static void draw(struct surface *s) {
 
     char line[32];
     snprintf(line, sizeof line, "%02u:%02u:%02u", t.hour, t.min, t.sec);
-    gfx_text(s, CX - gfx_text_width(line) / 2, CY + R + 16, line, theme->pal[PAL_FG], -1);
+    gfx_utext_center(s, &font_title, CX, CY + R + 14, line, theme->pal[PAL_FG]);
     snprintf(line, sizeof line, "%s %u %s %u", rtc_day_names[rtc_weekday(&t)], t.day,
              rtc_month_names[(t.mon + 11) % 12], t.year);
-    gfx_text(s, CX - gfx_text_width(line) / 2, CY + R + 36, line, theme->pal[PAL_DIM], -1);
+    gfx_utext_center(s, &font_ui, CX, CY + R + 42, line, theme->pal[PAL_DIM]);
 }
 
 static void tick(struct window *w) {
@@ -71,12 +71,12 @@ static void tick(struct window *w) {
 
 static void redraw(struct window *w) { draw(w->surf); }
 
-const struct app clock_app = { "clock", NULL, NULL, tick, redraw, NULL };
+const struct app clock_app = { .name = "clock", .tick = tick, .redraw = redraw, .icon = ICON_CLOCK };
 
 void clock_open(void) {
     struct window *w = wm_find(&clock_app);
     if (w) { wm_show(w); return; }
-    w = wm_open(&clock_app, "clock", 240, 276, NULL);
+    w = wm_open(&clock_app, "clock", 240, 290, NULL);
     if (!w) return;
     wm_move(w, fb.width - 240 - 48, WM_PANEL_H + 36);
     draw(w->surf);

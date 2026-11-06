@@ -135,6 +135,8 @@ const char *sh_input(int argc, char **argv, int i, size_t *len) {
 /* ---- built-in commands --------------------------------------------------------- */
 
 static void cmd_help(int, char **);
+static void cmd_passwd(int, char **);
+static void cmd_kill(int, char **);
 
 static void cmd_clear(int argc, char **argv) { (void)argc; (void)argv; con_clear(); }
 
@@ -153,7 +155,7 @@ static void cmd_uptime(int argc, char **argv) {
 static void cmd_mem(int argc, char **argv) { (void)argc; (void)argv; mem_print_map(); }
 
 static void cmd_theme(int argc, char **argv) {
-    if (argc > 1 && theme_set(argv[1]) == 0) return;
+    if (argc > 1 && theme_set(argv[1]) == 0) { config_set("theme", argv[1]); return; }
     if (argc > 1) kerrorf(C_ERR "no theme called '%s'\n", argv[1]);
     for (int i = 0; i < theme_count; i++) {
         const struct theme *t = &themes[i];
@@ -201,17 +203,26 @@ static void cmd_crash(int argc, char **argv) {
     else kprintf("usage: crash <pf|ud|de|bp>   " C_DIM "page fault, bad opcode, divide by zero, breakpoint\n");
 }
 
-static void cmd_reboot(int argc, char **argv) {
-    (void)argc; (void)argv;
-    kprintf(C_DIM "rebooting...\n");
+void power_reboot(void) {
+    diskfs_autosave();
     while (inb(0x64) & 2) {}
     outb(0x64, 0xfe);            /* ask the keyboard controller to pulse the reset line */
     halt_forever();
 }
 
+static void cmd_reboot(int argc, char **argv) {
+    (void)argc; (void)argv;
+    kprintf(C_DIM "rebooting...\n");
+    power_reboot();
+}
+
 static void cmd_shutdown(int argc, char **argv) {
     (void)argc; (void)argv;
     kprintf(C_DIM "goodbye.\n");
+    power_off();
+}
+
+void power_off(void) {
     diskfs_autosave();
     outw(0x604, 0x2000);         /* QEMU's ACPI power-off port; real hardware needs ACPI */
     outw(0xb004, 0x2000);        /* older QEMU / Bochs */
@@ -250,6 +261,11 @@ static const struct { const char *name, *help; void (*fn)(int, char **); } comma
     { "startx",   "start the desktop",                    cmd_startx   },
     { "files",    "file browser (on the desktop)",        cmd_files    },
     { "exit",     "leave the desktop",                    cmd_exit     },
+    { "open",     "open an app or a file on the desktop", cmd_open     },
+    { "notify",   "pop up a notification",                cmd_notify   },
+    { "lock",     "lock the screen",                      cmd_lock     },
+    { "passwd",   "set the lock screen password",         cmd_passwd   },
+    { "kill",     "stop a running program by its id",     cmd_kill     },
     /* disks */
     { "lsblk",    "list disks",                           cmd_lsblk    },
     { "blkread",  "show a raw disk sector",               cmd_blkread  },
@@ -474,9 +490,52 @@ static void prompt(void) {
     kprintf(C_ACCENT "%s " C_FG "%s " C_DIM "> " C_FG, sh_hostname(), shown);
 }
 
+static void cmd_passwd(int argc, char **argv) {
+    (void)argc; (void)argv;
+    if (!sh_is_tty()) { kerrorf(C_ERR "passwd" C_DIM ": needs the keyboard\n"); return; }
+    char pw[2][32];
+    for (int round = 0; round < 2; round++) {
+        kprintf(round ? "again, to be sure: " : "new password (empty = none): ");
+        int n = 0;
+        for (;;) {
+            int k = sh_wait_key();
+            if (k == '\n') break;
+            if (k == 3) { kprintf(C_DIM "^C\n"); return; }
+            if (k == '\b') { if (n) { n--; con_putc('\b'); } continue; }
+            if (k >= 32 && k < 127 && n < 31) { pw[round][n++] = (char)k; con_putc('*'); }
+        }
+        pw[round][n] = 0;
+        kprintf("\n");
+        if (!n) break;
+    }
+    if (pw[0][0] && strcmp(pw[0], pw[1])) { kerrorf(C_ERR "passwd" C_DIM ": those didn't match. nothing changed.\n"); return; }
+    passwd_change(pw[0]);
+    kprintf(pw[0][0] ? C_OK "password set." C_DIM " the lock screen will ask for it.\n"
+                     : C_DIM "password removed.\n");
+}
+
+static void cmd_kill(int argc, char **argv) {
+    uint64_t id;
+    if (argc < 2 || !sh_parse_num(argv[1], &id)) { kprintf("usage: kill <task id>   " C_DIM "(see ps)\n"); return; }
+    int r = task_kill((int)id);
+    if (r == 0) kprintf(C_DIM "asked task %lu to stop.\n", id);
+    else if (r == -1) kerrorf(C_ERR "kill" C_DIM ": no task %lu\n", id);
+    else kerrorf(C_ERR "kill" C_DIM ": task %lu is part of the kernel; only programs can be stopped\n", id);
+}
+
 void shell_run(void) {
     char line[LINE_MAX];
     cwd = fs_home();
+    config_apply();
+    if (strcmp(config_get("autostart", "yes"), "no") && fb.width >= 800) {
+        kprintf(C_DIM "starting the desktop... (" C_FG "settings" C_DIM " can turn this off)\n");
+        wm_start();
+        if (wm_active()) {
+            kprintf(C_ACCENT "welcome to dream " DREAM_VERSION "." C_DIM " type " C_FG "help" C_DIM
+                    " for commands, or press the super key to open apps.\n\n");
+            if (passwd_set()) wm_lock();
+        }
+    }
     for (;;) {
         prompt();
         read_line(line);

@@ -32,8 +32,8 @@ static void pick_colors(void) {
 }
 
 static void draw_toolbar(struct surface *s) {
-    gfx_fill(s, 0, 0, s->w, TOOLBAR_H, theme->bar);
-    gfx_fill(s, 0, TOOLBAR_H - 1, s->w, 1, gfx_mix(theme->bar, theme->pal[PAL_DIM], 90));
+    gfx_fill(s, 0, 0, s->w, TOOLBAR_H, ui(UI_BG));
+    gfx_fill(s, 0, TOOLBAR_H - 1, s->w, 1, ui(UI_LINE));
     int sy = (TOOLBAR_H - SWATCH) / 2;
     for (int i = 0; i < NCOLORS; i++) {
         int sx = 14 + i * (SWATCH + 8);
@@ -41,18 +41,17 @@ static void draw_toolbar(struct surface *s) {
         gfx_round(s, sx, sy, SWATCH, SWATCH, 6, colors[i]);
     }
 
-    int tx = 14 + NCOLORS * (SWATCH + 8) + 12, ty = (TOOLBAR_H - FONT_H) / 2;
+    int tx = 14 + NCOLORS * (SWATCH + 8) + 12, ty = (TOOLBAR_H - font_ui.height) / 2;
     char info[32];
     snprintf(info, sizeof info, "brush %2d", brush);
-    gfx_text(s, tx, ty, info, theme->pal[PAL_FG], -1);
+    gfx_utext(s, &font_ui, tx, ty, info, ui(UI_TEXT));
     int r = brush < 12 ? brush : 12;
     gfx_circle(s, tx + 9 * FONT_W + 14, TOOLBAR_H / 2, r, colors[selected]);
     snprintf(info, sizeof info, "%4d, %4d", lx, ly - TOOLBAR_H);
-    gfx_text(s, tx + 9 * FONT_W + 40, ty, info, theme->pal[PAL_DIM], -1);
+    gfx_utext(s, &font_ui, tx + 9 * FONT_W + 40, ty, info, ui(UI_DIM));
 
     clear_btn = (struct rect){ s->w - 14 - 64, sy, 64, SWATCH };
-    gfx_round(s, clear_btn.x, clear_btn.y, clear_btn.w, clear_btn.h, 7, gfx_mix(theme->bar, theme->pal[PAL_FG], 30));
-    gfx_text(s, clear_btn.x + (clear_btn.w - 5 * FONT_W) / 2, ty, "clear", theme->pal[PAL_FG], -1);
+    ui_button(s, clear_btn, "clear", false, false);
 }
 
 static void clear_canvas(struct surface *s) {
@@ -103,7 +102,7 @@ static void key(struct window *w, int k) {
 
 static void redraw(struct window *w) { pick_colors(); draw_toolbar(w->surf); }
 
-const struct app paint_app = { "paint", mouse, key, NULL, redraw, NULL };
+const struct app paint_app = { .name = "paint", .mouse = mouse, .key = key, .redraw = redraw, .icon = ICON_PAINT };
 
 void paint_open(void) {
     struct window *w = wm_find(&paint_app);

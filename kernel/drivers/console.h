@@ -4,6 +4,7 @@
 
 void con_init(void);                              /* text mode: the whole screen */
 void con_attach(struct surface *s, bool with_bar); /* draw into this surface instead */
+void con_reattach(struct surface *s);              /* new size, same text */
 void con_flush(void);                             /* show what changed (text mode) */
 void con_putc(char c);
 void con_write(const char *s);
