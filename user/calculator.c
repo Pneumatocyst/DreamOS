@@ -1,11 +1,11 @@
 /* calculator: the four operations, with decimals.
  *
- * The kernel has no floating point, so numbers are "fixed point": whole numbers
- * that count millionths. 2.5 is stored as 2500000. Adding is just adding;
- * multiplying and dividing need a little care so nothing overflows. */
-#include "gui/wm.h"
-#include "drivers/keyboard.h"
-#include "drivers/mouse.h"
+ * Numbers are "fixed point": whole numbers that count millionths, so 2.5 is stored
+ * as 2500000. Programs could use floating point now, but fixed point is exact for
+ * money-style sums (0.1 + 0.2 really is 0.3 here), and it's a nice trick to know.
+ * Adding is just adding; multiplying and dividing need a little care so nothing
+ * overflows. */
+#include "gui.h"
 
 #define SCALE 1000000LL            /* six decimal places */
 #define LIMIT 999999999999LL       /* the biggest whole part we show */
@@ -13,7 +13,9 @@
 #define H     430
 #define DISP  120
 #define GAP   8
+#define C(slot) COLOR_UI(slot)
 
+static int win;
 static int64_t acc, cur;           /* the running total and the number being typed */
 static char op;                    /* pending + - * / (0 = none) */
 static bool typing, has_dot, error;
@@ -30,9 +32,20 @@ static const char *const labels[20] = {
     "0", ".", "<", "=",
 };
 
-static struct rect cell(int i) {
-    int bw = (W - 5 * GAP) / 4, bh = (H - DISP - 6 * GAP) / 5;
-    return (struct rect){ GAP + (i % 4) * (bw + GAP), DISP + GAP + (i / 4) * (bh + GAP), bw, bh };
+static void cell(int i, int *x, int *y, int *w, int *h) {
+    *w = (W - 5 * GAP) / 4;
+    *h = (H - DISP - 6 * GAP) / 5;
+    *x = GAP + (i % 4) * (*w + GAP);
+    *y = DISP + GAP + (i / 4) * (*h + GAP);
+}
+
+static int cell_at(int px, int py) {
+    for (int i = 0; i < 20; i++) {
+        int x, y, w, h;
+        cell(i, &x, &y, &w, &h);
+        if (px >= x && px < x + w && py >= y && py < y + h) return i;
+    }
+    return -1;
 }
 
 /* ---- arithmetic in millionths -------------------------------------------------------------- */
@@ -84,8 +97,7 @@ static void format(int64_t v, char *out, size_t n) {
     int f = 6;
     while (f > 0 && frac[f - 1] == '0') f--;            /* drop trailing zeros */
     frac[f] = 0;
-    /* whole part with thin separators: 1 234 567 */
-    char whole[24], grouped[32];
+    char whole[24], grouped[32];                         /* 1,234,567 */
     snprintf(whole, sizeof whole, "%lu", x / SCALE);
     int wl = (int)strlen(whole), g = 0;
     for (int i = 0; i < wl; i++) {
@@ -117,12 +129,11 @@ static void digit(int d) {
 
 static void operator(char o) {
     if (error) return;
-    char a[32], b[32];
+    char a[32];
     if (op && typing) acc = apply(acc, op, cur);
     else if (!op) acc = cur;
     if (too_big(acc)) error = true;
     format(acc, a, sizeof a);
-    (void)b;
     op = o;
     typing = false;
     cur = acc;
@@ -159,67 +170,62 @@ static void press(int i) {
     else if (!strcmp(l, "C")) clear();
     else if (!strcmp(l, "+/-")) cur = -cur;
     else if (!strcmp(l, "%")) cur = cur / 100;
-    else if (!strcmp(l, ".")) { if (!typing) digit(0), cur = 0; has_dot = true; }
+    else if (!strcmp(l, ".")) { if (!typing) { digit(0); cur = 0; } has_dot = true; }
     else if (!strcmp(l, "<")) backspace();
     else if (!strcmp(l, "=")) equals();
     else operator(l[0] == 'x' ? '*' : l[0]);
 }
 
-/* ---- drawing and input --------------------------------------------------------------------- */
+/* ---- drawing and input ---------------------------------------------------------------------- */
 
-static void draw(struct surface *s) {
-    gfx_fill(s, 0, 0, W, H, ui(UI_BG));
-    gfx_utext_fit(s, &font_ui, W - 16 - gfx_utext_width(&font_ui, history), 18, history, ui(UI_DIM), W - 32);
+static void draw(void) {
+    draw_fill(0, 0, W, H, C(UI_BG));
+    draw_text_fit(FONT_UI, W - 16 - text_width(FONT_UI, history), 18, history, C(UI_DIM), W - 32);
     char shown[40];
     format(cur, shown, sizeof shown);
     if (typing && has_dot && !decimals) strlcpy(shown + strlen(shown), ".", 2);
-    const struct uifont *f = gfx_utext_width(&font_big, shown) < W - 32 ? &font_big : &font_title;
-    gfx_utext(s, f, W - 16 - gfx_utext_width(f, shown), DISP - f->height - 14, shown, error ? ui(UI_ERR) : ui(UI_TEXT));
+    int font = text_width(FONT_BIG, shown) < W - 32 ? FONT_BIG : FONT_TITLE;
+    int fh = font == FONT_BIG ? 42 : 25;
+    draw_text(font, W - 16 - text_width(font, shown), DISP - fh - 14, shown, error ? C(UI_ERR) : C(UI_TEXT));
     for (int i = 0; i < 20; i++) {
-        struct rect r = cell(i);
+        int x, y, w, h;
+        cell(i, &x, &y, &w, &h);
         bool isop = i % 4 == 3, istop = i < 3;
-        uint32_t bg = isop ? ui(UI_ACCENT) : istop ? gfx_mix(ui(UI_RAISED), ui(UI_TEXT), 20) : ui(UI_RAISED);
-        if (i == pressed_btn) bg = gfx_mix(bg, 0x000000, 60);
-        else if (i == hover) bg = gfx_mix(bg, 0xffffff, 30);
-        if (isop && op == (labels[i][0] == 'x' ? '*' : labels[i][0]) && !typing) bg = gfx_mix(bg, 0xffffff, 110);
-        gfx_round(s, r.x, r.y, r.w, r.h, 14, bg);
-        const struct uifont *lf = &font_title;
-        gfx_utext_center(s, lf, r.x + r.w / 2, r.y + (r.h - lf->height) / 2, labels[i], isop ? ui(UI_ON_ACCENT) : ui(UI_TEXT));
+        uint32_t bg = isop ? ui(UI_ACCENT) : istop ? mix(ui(UI_RAISED), ui(UI_TEXT), 20) : ui(UI_RAISED);
+        if (i == pressed_btn) bg = mix(bg, 0x000000, 60);
+        else if (i == hover) bg = mix(bg, 0xffffff, 30);
+        if (isop && op == (labels[i][0] == 'x' ? '*' : labels[i][0]) && !typing) bg = mix(bg, 0xffffff, 110);
+        draw_round(x, y, w, h, 14, bg);
+        draw_text_center(FONT_TITLE, x + w / 2, y + (h - 25) / 2, labels[i], isop ? C(UI_ON_ACCENT) : C(UI_TEXT));
     }
 }
 
-static void mouse(struct window *w, int x, int y, uint8_t buttons, int wheel) {
+static void mouse(int x, int y, uint8_t buttons, int wheel) {
     (void)wheel;
-    int h = -1;
-    for (int i = 0; i < 20; i++) if (rect_contains(cell(i), x, y)) h = i;
-    bool down = (buttons & MOUSE_LEFT) && !(held & MOUSE_LEFT), up = !(buttons & MOUSE_LEFT) && (held & MOUSE_LEFT);
+    int h = cell_at(x, y);
+    bool down = (buttons & 1) && !(held & 1), up = !(buttons & 1) && (held & 1);
     held = buttons;
     bool changed = h != hover;
     hover = h;
     if (down) { pressed_btn = h; changed = true; }
     if (up) { if (pressed_btn >= 0 && pressed_btn == h) press(h); pressed_btn = -1; changed = true; }
-    if (changed) draw(w->surf);
+    if (changed) draw();
 }
 
-static void key(struct window *w, int k) {
+static void key(int k) {
     static const char map[] = "C?%/789*456-123+0.<=";
     if (k == '\n') k = '=';
     if (k == 27 || k == 'c' || k == 'C') k = 'C';
     if (k == '\b') k = '<';
     if (k == 'x' || k == 'X') k = '*';
     for (int i = 0; i < 20; i++) if (map[i] == k) { press(i); break; }
-    draw(w->surf);
+    draw();
 }
 
-static void redraw(struct window *w) { draw(w->surf); }
-
-const struct app calc_app = { .name = "calculator", .mouse = mouse, .key = key, .redraw = redraw, .icon = ICON_CALC };
-
-void calc_open(void) {
-    struct window *w = wm_find(&calc_app);
-    if (w) { wm_show(w); return; }
-    w = wm_open(&calc_app, "calculator", W, H, NULL);
-    if (!w) return;
+int main(void) {
+    win = win_open("calculator", W, H, ICON_CALC, 0, 0);
+    if (win < 0) { puts("the calculator needs the desktop: type startx first.\n"); return 1; }
     clear();
-    draw(w->surf);
+    app_run(win, &(struct app_loop){ .draw = draw, .key = key, .mouse = mouse });
+    return 0;
 }

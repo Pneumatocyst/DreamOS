@@ -25,6 +25,12 @@ void win_front(int win);
 void notify(int win, const char *title, const char *body);
 int  text_width(int font, const char *s);
 
+/* The theme's colours as real 0xRRGGBB values (kept up to date for you: win_event
+   refreshes them when the theme changes). Use these when you need to mix shades. */
+uint32_t ui(int slot);                                    /* UI_BG, UI_TEXT, ... */
+const struct theme_info *current_theme(void);
+uint32_t mix(uint32_t a, uint32_t b, int t);              /* t: 0 = a ... 256 = b */
+
 void draw_fill(int x, int y, int w, int h, uint32_t c);
 void draw_round(int x, int y, int w, int h, int r, uint32_t c);
 void draw_round_a(int x, int y, int w, int h, int r, uint32_t c, int alpha);   /* 0..256 */
@@ -38,3 +44,22 @@ void draw_icon(int icon, int x, int y, int size);
 void draw_button(int x, int y, int w, int h, const char *label, bool hot, bool primary);
 void draw_field(int x, int y, int w, int h, const char *text, bool focused, bool secret);
 void draw_scrollbar(int x, int y, int h, int total, int visible, int pos);
+void draw_ring_a(int x, int y, int w, int h, int r, uint32_t c, int alpha);
+void draw_gradient(int x, int y, int w, int h, int r, uint32_t top, uint32_t bottom);
+void draw_text_center(int font, int cx, int y, const char *s, uint32_t c);
+void draw_toggle(int x, int y, bool on);                  /* a 40 x 22 switch */
+void draw_wallpaper(int x, int y, int w, int h, const char *style);
+
+/* A simple main loop for apps: it waits for events and calls you back. Any callback may
+   be NULL. tick runs every tick_ms while nothing else happens (0 = never). It returns
+   when the window is closed (if close is NULL or returns true). */
+struct app_loop {
+    void (*draw)(void);                                   /* repaint everything */
+    void (*key)(int key);
+    void (*mouse)(int x, int y, uint8_t buttons, int wheel);
+    void (*resize)(int w, int h);                         /* NULL: just draw again */
+    void (*tick)(void);
+    bool (*close)(void);                                  /* false = stay open */
+    int tick_ms;
+};
+void app_run(int win, const struct app_loop *a);

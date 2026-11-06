@@ -183,6 +183,13 @@ static void run(struct surface *s, const struct dcmd *c, const char *text) {
     case DRAW_BUTTON: ui_button(s, (struct rect){ c->x, c->y, c->w, c->h }, text, c->arg & 1, c->arg & 2); break;
     case DRAW_FIELD:  ui_field(s, (struct rect){ c->x, c->y, c->w, c->h }, text, NULL, c->arg & 1, c->arg & 2); break;
     case DRAW_SCROLLBAR: ui_scrollbar(s, c->x, c->y, c->h, (int)c->c1, (int)c->c2, c->arg); break;
+    case DRAW_GRADIENT:  gfx_round_ex(s, c->x, c->y, c->w, c->h, c->r, c1, colour(c->c2), 256); break;
+    case DRAW_WALLPAPER:
+        if (c->w > 0 && c->h > 0 && c->w <= 400 && c->h <= 300) {   /* paint it small, then copy it in */
+            struct surface *t = surface_new(c->w, c->h);
+            if (t) { wallpaper_draw(t, text); gfx_blit(s, c->x, c->y, t, 0, 0, c->w, c->h); surface_free(t); }
+        }
+        break;
     }
 }
 

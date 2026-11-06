@@ -16,8 +16,71 @@ enum {
     SYS_WINCTL,      /* (handle, WINCTL_*, arg) -> depends */
     SYS_MEASURE,     /* (font, text)            -> width in pixels */
     SYS_CLIPBOARD,   /* (CLIP_GET, buf, len) -> bytes copied out; (CLIP_SET, buf, len) -> 0 */
+    SYS_STAT,        /* (path, struct file_stat *) -> 0 or a FS_E* error */
+    SYS_FSOP,        /* (FSOP_*, path, arg)     -> 0 or a FS_E* error */
+    SYS_SYSINFO,     /* (struct sysinfo *)      -> 0 */
+    SYS_TASKS,       /* (struct task_entry *, max) -> how many */
+    SYS_KILL,        /* (task id)               -> 0, or -1 no such task, -2 a kernel task */
+    SYS_CONFIG,      /* (CONFIG_GET, key, char out[64]) -> 0 / -1 unset; (CONFIG_SET, key, value) */
+    SYS_THEME,       /* (THEME_*, arg, out)     -> see below */
+    SYS_PASSWD,      /* (PW_*, password)        -> PW_ISSET: 1/0 */
+    SYS_SPAWN,       /* (program, argument or 0) -> task id, or -1: start it in the background */
+    SYS_TERMINAL,    /* (command line)          -> 0, or -1 if the terminal is busy: type it there */
 };
 enum { CLIP_GET, CLIP_SET };
+
+/* ---- files ---------------------------------------------------------------------------- */
+struct file_stat {
+    int64_t  size;           /* bytes (files) */
+    int32_t  is_dir;
+    int32_t  children;       /* folders: how many things are in it */
+    uint16_t year;           /* last changed */
+    uint8_t  mon, day, hour, min, sec, _pad;
+};
+enum { FSOP_MKDIR = 1, FSOP_CREATE, FSOP_REMOVE /* folders: everything in them too */,
+       FSOP_RENAME /* arg: the new name */ };
+/* errors (negative), the same as the kernel's FS_E* */
+enum { E_NOENT = -1, E_EXIST = -2, E_NOTDIR = -3, E_ISDIR = -4, E_NOSPC = -5, E_NOTEMPTY = -6,
+       E_INVAL = -7, E_FBIG = -8, E_BUSY = -20 /* the terminal is in there */ };
+
+/* ---- the system ------------------------------------------------------------------------- */
+struct sysinfo {
+    uint64_t mem_used, mem_total;      /* bytes */
+    uint64_t uptime_ms;
+    int32_t  cpu;                      /* % busy, lately */
+    int32_t  ntasks;
+    uint64_t total_ticks;              /* timer ticks since boot (for per-task cpu %) */
+    int32_t  hz;                       /* ticks per second */
+    int32_t  screen_w, screen_h;
+    uint64_t fs_generation;            /* changes whenever any file does */
+    int32_t  files, dirs, max_nodes;
+    uint64_t fs_bytes;
+    char     disk[8], disk_model[41];  /* empty disk: files only live in memory */
+    uint64_t disk_mb, disk_saves;
+    char     theme[16], hostname[32];
+    uint16_t year;                     /* the clock (local time) */
+    uint8_t  mon, day, hour, min, sec, weekday;   /* weekday 0 = sunday */
+};
+struct task_entry {
+    int32_t  id;
+    char     name[16];
+    int32_t  state;                    /* 0 ready, 1 running, 2 sleeping, 3 done */
+    uint64_t ticks;                    /* CPU time used */
+    int32_t  user;                     /* 1 = a program (can be stopped) */
+};
+enum { CONFIG_GET, CONFIG_SET };
+enum { PW_ISSET, PW_SET, PW_CLEAR };
+
+/* SYS_THEME: THEME_GET (index or -1 = the current one, struct theme_info *) -> how many themes
+              THEME_SET (name)   WALLPAPER_SET (name)
+              WALLPAPER_NAME (index, char out[16]) -> how many wallpapers */
+enum { THEME_GET, THEME_SET, WALLPAPER_SET, WALLPAPER_NAME };
+struct theme_info {
+    char     name[16];
+    uint32_t bg_top, bg_bottom, bar;
+    uint32_t pal[6];                   /* text, dim, accent, ok, warn, err */
+    uint32_t ui[16];                   /* what each UI_* slot is in this theme (current theme only) */
+};
 #define FILE_IS_DIR (-2)
 
 /* ---- windows ------------------------------------------------------------------------- */
@@ -67,6 +130,8 @@ enum {
     DRAW_BUTTON,       /* x y w h text, arg: 1 = hovered, 2 = primary */
     DRAW_FIELD,        /* x y w h text, arg: 1 = focused, 2 = secret; c2 = placeholder? no */
     DRAW_SCROLLBAR,    /* x y h, c1 = total, c2 = visible, arg = position */
+    DRAW_GRADIENT,     /* x y w h r, c1 at the top fading to c2 at the bottom */
+    DRAW_WALLPAPER,    /* x y w h text = style: a little preview of a wallpaper */
 };
 struct dcmd {
     uint8_t  op, font;

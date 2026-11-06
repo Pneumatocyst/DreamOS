@@ -96,6 +96,17 @@ uint64_t sys_event(struct process *p, uint64_t h, uint64_t out, uint64_t wait_ms
 uint64_t sys_winctl(struct process *p, uint64_t h, uint64_t op, uint64_t arg);
 uint64_t sys_measure(struct process *p, uint64_t font, uint64_t str);
 
+/* the rest of the system calls for apps (sys/syscalls.c) */
+uint64_t sys_stat(struct process *p, uint64_t path, uint64_t out);
+uint64_t sys_fsop(struct process *p, uint64_t op, uint64_t path, uint64_t arg);
+uint64_t sys_sysinfo(struct process *p, uint64_t out);
+uint64_t sys_tasks(struct process *p, uint64_t out, uint64_t max);
+uint64_t sys_config(struct process *p, uint64_t op, uint64_t key, uint64_t val);
+uint64_t sys_theme(struct process *p, uint64_t op, uint64_t arg, uint64_t out);
+uint64_t sys_passwd(struct process *p, uint64_t op, uint64_t pw);
+uint64_t sys_spawn(struct process *p, uint64_t prog, uint64_t arg);
+uint64_t sys_terminal(struct process *p, uint64_t cmd);
+
 struct window *wm_open(const struct app *app, const char *title, int w, int h, void *data);
 void wm_close(struct window *w);
 void wm_show(struct window *w);
@@ -132,7 +143,6 @@ void notes_open_file(const char *path);
 void calc_open(void);
 void monitor_open(void);
 void settings_open(void);
-void settings_open_page(int page);
 void snake_open(void);
 
 /* ---- settings that survive a reboot (sys/config.c, stored in /etc/dream.conf) -------- */

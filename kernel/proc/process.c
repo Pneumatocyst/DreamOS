@@ -345,6 +345,16 @@ void syscall_dispatch(struct regs *r) {
     case SYS_WINCTL:   r->rax = sys_winctl(p, a, b, c); break;
     case SYS_MEASURE:  r->rax = sys_measure(p, a, b); break;
     case SYS_CLIPBOARD: r->rax = sys_clipboard(p, a, b, c); break;
+    case SYS_STAT:     r->rax = sys_stat(p, a, b); break;
+    case SYS_FSOP:     r->rax = sys_fsop(p, a, b, c); break;
+    case SYS_SYSINFO:  r->rax = sys_sysinfo(p, a); break;
+    case SYS_TASKS:    r->rax = sys_tasks(p, a, b); break;
+    case SYS_KILL:     r->rax = (uint64_t)(int64_t)task_kill((int)a); break;
+    case SYS_CONFIG:   r->rax = sys_config(p, a, b, c); break;
+    case SYS_THEME:    r->rax = sys_theme(p, a, b, c); break;
+    case SYS_PASSWD:   r->rax = sys_passwd(p, a, b); break;
+    case SYS_SPAWN:    r->rax = sys_spawn(p, a, b); break;
+    case SYS_TERMINAL: r->rax = sys_terminal(p, a); break;
     default:           r->rax = BAD;
     }
     if (p->killed) process_exit(130);

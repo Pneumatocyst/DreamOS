@@ -1,11 +1,7 @@
 /* snake: steer with the arrow keys, eat the dots, don't run into yourself.
  * The walls wrap around. Space pauses; enter starts again. Your best score is
- * kept in /etc/dream.conf, so it survives a reboot. */
-#include "gui/wm.h"
-#include "drivers/keyboard.h"
-#include "drivers/mouse.h"
-#include "arch/cpu.h"
-#include "arch/io.h"
+ * kept in /etc/dream.conf (config_set), so it survives a reboot. */
+#include "gui.h"
 
 #define COLS  24
 #define ROWS  17
@@ -14,7 +10,9 @@
 #define W     (COLS * CELL)
 #define H     (TOP + ROWS * CELL)
 #define MAXLEN (COLS * ROWS)
+#define C(slot) COLOR_UI(slot)
 
+static int win;
 static struct { int8_t x, y; } body[MAXLEN];
 static int len, dx, dy, ndx, ndy, score, best, fx, fy, steps;
 static bool over, paused, started;
@@ -32,61 +30,62 @@ static void place_food(void) {
 }
 
 static void reset(void) {
-    seed ^= (uint32_t)pit_ticks();
+    seed ^= (uint32_t)uptime_ms();
     len = 4;
     for (int i = 0; i < len; i++) body[i].x = COLS / 2 - i, body[i].y = ROWS / 2;
     dx = ndx = 1; dy = ndy = 0;
     score = steps = 0;
     over = paused = false;
     place_food();
-    const char *b = config_get("snake_best", "0");
-    best = 0;
-    while (*b >= '0' && *b <= '9') best = best * 10 + (*b++ - '0');
+    char b[64];
+    best = config_get("snake_best", b) ? atoi(b) : 0;
 }
 
-static void draw(struct surface *s) {
-    uint32_t board = gfx_mix(ui(UI_BG), 0x000000, 50);
-    gfx_fill(s, 0, 0, W, H, ui(UI_BG));
+static void draw(void) {
+    uint32_t board = mix(ui(UI_BG), 0x000000, 50);
+    draw_fill(0, 0, W, H, C(UI_BG));
     char t[40];
     snprintf(t, sizeof t, "%d", score);
-    gfx_utext(s, &font_title, 16, 12, t, ui(UI_TEXT));
-    gfx_utext(s, &font_ui, 22 + gfx_utext_width(&font_title, t), 16, "points", ui(UI_DIM));
+    draw_text(FONT_TITLE, 16, 12, t, C(UI_TEXT));
+    draw_text(FONT_UI, 22 + text_width(FONT_TITLE, t), 16, "points", C(UI_DIM));
     snprintf(t, sizeof t, "best %d", best);
-    gfx_utext(s, &font_bold, W - 16 - gfx_utext_width(&font_bold, t), 16, t, ui(UI_ACCENT));
+    draw_text(FONT_BOLD, W - 16 - text_width(FONT_BOLD, t), 16, t, C(UI_ACCENT));
 
-    gfx_fill(s, 0, TOP, W, H - TOP, board);
+    draw_fill(0, TOP, W, H - TOP, board);
+    uint32_t check = mix(board, ui(UI_TEXT), 6);
     for (int y = 0; y < ROWS; y++)               /* a faint checkerboard */
         for (int x = (y & 1); x < COLS; x += 2)
-            gfx_fill(s, x * CELL, TOP + y * CELL, CELL, CELL, gfx_mix(board, ui(UI_TEXT), 6));
+            draw_fill(x * CELL, TOP + y * CELL, CELL, CELL, check);
 
     /* food: a glowing dot */
     int cx = fx * CELL + CELL / 2, cy = TOP + fy * CELL + CELL / 2;
-    gfx_circle(s, cx, cy, CELL / 2 + 2, gfx_mix(board, ui(UI_ERR), 70));
-    gfx_circle(s, cx, cy, CELL / 2 - 4, ui(UI_ERR));
+    draw_circle(cx, cy, CELL / 2 + 2, mix(board, ui(UI_ERR), 70));
+    draw_circle(cx, cy, CELL / 2 - 4, C(UI_ERR));
 
     /* the snake, fading from head to tail */
+    uint32_t ok = ui(UI_OK);
     for (int i = len - 1; i >= 0; i--) {
-        uint32_t c = gfx_mix(ui(UI_OK), gfx_mix(ui(UI_OK), board, 150), i * 256 / (len + 2));
-        gfx_round(s, body[i].x * CELL + 2, TOP + body[i].y * CELL + 2, CELL - 4, CELL - 4, 6, c);
+        uint32_t c = mix(ok, mix(ok, board, 150), i * 256 / (len + 2));
+        draw_round(body[i].x * CELL + 2, TOP + body[i].y * CELL + 2, CELL - 4, CELL - 4, 6, c);
         /* bridge to the next segment so it reads as one body (unless it wrapped) */
         if (i + 1 < len) {
             int nx = body[i + 1].x, ny = body[i + 1].y;
             if (nx == body[i].x && (ny - body[i].y == 1 || ny - body[i].y == -1))
-                gfx_fill(s, body[i].x * CELL + 2, TOP + (ny > body[i].y ? ny : body[i].y) * CELL - 4, CELL - 4, 8, c);
+                draw_fill(body[i].x * CELL + 2, TOP + (ny > body[i].y ? ny : body[i].y) * CELL - 4, CELL - 4, 8, c);
             if (ny == body[i].y && (nx - body[i].x == 1 || nx - body[i].x == -1))
-                gfx_fill(s, (nx > body[i].x ? nx : body[i].x) * CELL - 4, TOP + body[i].y * CELL + 2, 8, CELL - 4, c);
+                draw_fill((nx > body[i].x ? nx : body[i].x) * CELL - 4, TOP + body[i].y * CELL + 2, 8, CELL - 4, c);
         }
     }
     int hx = body[0].x * CELL + CELL / 2, hy = TOP + body[0].y * CELL + CELL / 2;   /* eyes */
-    gfx_circle(s, hx + dx * 3 - dy * 4, hy + dy * 3 + dx * 4, 2, board);
-    gfx_circle(s, hx + dx * 3 + dy * 4, hy + dy * 3 - dx * 4, 2, board);
+    draw_circle(hx + dx * 3 - dy * 4, hy + dy * 3 + dx * 4, 2, board);
+    draw_circle(hx + dx * 3 + dy * 4, hy + dy * 3 - dx * 4, 2, board);
 
     const char *msg = !started ? "press an arrow key to start" : over ? "crashed! press enter to play again"
                     : paused ? "paused. space to carry on" : NULL;
     if (msg) {
-        int mw = gfx_utext_width(&font_bold, msg) + 40;
-        gfx_round_a(s, (W - mw) / 2, TOP + (H - TOP) / 2 - 22, mw, 44, 22, 0x000000, 170);
-        gfx_utext_center(s, &font_bold, W / 2, TOP + (H - TOP) / 2 - 9, msg, 0xffffff);
+        int mw = text_width(FONT_BOLD, msg) + 40;
+        draw_round_a((W - mw) / 2, TOP + (H - TOP) / 2 - 22, mw, 44, 22, 0x000000, 170);
+        draw_text_center(FONT_BOLD, W / 2, TOP + (H - TOP) / 2 - 9, msg, 0xffffff);
     }
 }
 
@@ -103,7 +102,7 @@ static void step(void) {
             snprintf(b, sizeof b, "%d", score);
             config_set("snake_best", b);
             best = score;
-            wm_notify("new best score in snake!", b);
+            notify(win, "new best score in snake!", b);
         }
         return;
     }
@@ -113,15 +112,15 @@ static void step(void) {
     if (eat) { score += 10; if (len < MAXLEN) place_food(); }
 }
 
-static void tick(struct window *w) {
+static void tick(void) {
     if (!started || over || paused) return;
     /* faster as you grow: every tick (10/s) once you're long, every other tick at first */
     if (++steps % (len < 12 ? 2 : 1)) return;
     step();
-    draw(w->surf);
+    draw();
 }
 
-static void key(struct window *w, int k) {
+static void key(int k) {
     int kx = k == KEY_LEFT ? -1 : k == KEY_RIGHT ? 1 : 0, ky = k == KEY_UP ? -1 : k == KEY_DOWN ? 1 : 0;
     if (kx || ky) {
         started = true;
@@ -129,20 +128,13 @@ static void key(struct window *w, int k) {
     }
     if (k == ' ' && !over) paused = !paused;
     if (k == '\n' && over) { reset(); started = true; }
-    draw(w->surf);
+    draw();
 }
 
-static void redraw(struct window *w) { draw(w->surf); }
-static bool close(struct window *w) { (void)w; started = false; return true; }
-
-const struct app snake_app = { .name = "snake", .key = key, .tick = tick, .redraw = redraw, .close = close, .icon = ICON_SNAKE };
-
-void snake_open(void) {
-    struct window *w = wm_find(&snake_app);
-    if (w) { wm_show(w); return; }
-    w = wm_open(&snake_app, "snake", W, H, NULL);
-    if (!w) return;
+int main(void) {
+    win = win_open("snake", W, H, ICON_SNAKE, 0, 0);
+    if (win < 0) { puts("snake needs the desktop: type startx first.\n"); return 1; }
     reset();
-    started = false;
-    draw(w->surf);
+    app_run(win, &(struct app_loop){ .draw = draw, .key = key, .tick = tick, .tick_ms = 100 });
+    return 0;
 }

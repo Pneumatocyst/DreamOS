@@ -1,6 +1,7 @@
 /* Every app on the desktop, in the order the dock and the launcher show them. */
 #include "gui/wm.h"
 #include "proc/process.h"
+#include "shell/shell.h"
 
 void launcher_open(void);
 
@@ -14,13 +15,30 @@ static void start(const char *name, const char *file) {
         wm_notify("couldn't start that", name);
 }
 
-void notes_open(void) {
-    struct window *w = wm_find_icon(ICON_NOTES);
+/* Bring the app's window forward if it's open, otherwise start the program. */
+static void open_app(int icon, const char *program, const char *arg) {
+    struct window *w = wm_find_icon(icon);
     if (w) wm_show(w);
-    else start("notes", NULL);
+    else start(program, arg);
 }
 
-void notes_open_file(const char *path) { start("notes", path); }
+void notes_open(void)    { open_app(ICON_NOTES, "notes", NULL); }
+void files_open(void)    { open_app(ICON_FILES, "files", NULL); }
+void calc_open(void)     { open_app(ICON_CALC, "calculator", NULL); }
+void paint_open(void)    { open_app(ICON_PAINT, "paint", NULL); }
+void monitor_open(void)  { open_app(ICON_MONITOR, "monitor", NULL); }
+void settings_open(void) { open_app(ICON_SETTINGS, "settings", NULL); }
+void about_open(void)    { open_app(ICON_SETTINGS, "settings", "about"); }
+void clock_open(void)    { open_app(ICON_CLOCK, "clock", NULL); }
+void snake_open(void)    { open_app(ICON_SNAKE, "snake", NULL); }
+void notes_open_file(const char *path) { start("notes", path); }   /* always a new one */
+
+/* `paint` from the shell: open the desktop if needed, then the app. */
+SH_CMD(paint) {
+    (void)argc; (void)argv;
+    if (!wm_active()) wm_start();
+    wm_post(WM_REQ_PAINT);                /* the desktop task starts it */
+}
 
 const struct app_entry app_list[] = {
     { "apps",       "everything, searchable",       ICON_APPS,     launcher_open, true  },

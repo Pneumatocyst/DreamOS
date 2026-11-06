@@ -69,6 +69,24 @@ void draw_button(int x, int y, int w, int h, const char *label, bool hot, bool p
 void draw_field(int x, int y, int w, int h, const char *text, bool focused, bool secret) {
     box(DRAW_FIELD, x, y, w, h, 0, text)->arg = (focused ? 1 : 0) | (secret ? 2 : 0);
 }
+void draw_ring_a(int x, int y, int w, int h, int r, uint32_t c, int alpha) {
+    struct dcmd *d = box(DRAW_RING, x, y, w, h, c, NULL);
+    d->r = r;
+    d->c2 = alpha < 1 ? 1 : alpha;
+}
+void draw_gradient(int x, int y, int w, int h, int r, uint32_t top, uint32_t bottom) {
+    struct dcmd *d = box(DRAW_GRADIENT, x, y, w, h, top, NULL);
+    d->r = r;
+    d->c2 = bottom;
+}
+void draw_text_center(int font, int cx, int y, const char *s, uint32_t c) {
+    draw_text(font, cx - text_width(font, s) / 2, y, s, c);
+}
+void draw_toggle(int x, int y, bool on) {
+    draw_round(x, y, 40, 22, 11, on ? COLOR_UI(UI_ACCENT) : COLOR_UI(UI_RAISED));
+    draw_circle(on ? x + 29 : x + 11, y + 11, 8, on ? 0xffffff : COLOR_UI(UI_DIM));
+}
+void draw_wallpaper(int x, int y, int w, int h, const char *style) { box(DRAW_WALLPAPER, x, y, w, h, 0, style); }
 void draw_scrollbar(int x, int y, int h, int total, int visible, int pos) {
     struct dcmd *d = box(DRAW_SCROLLBAR, x, y, 0, h, total, NULL);
     d->c2 = visible;
@@ -77,7 +95,23 @@ void draw_scrollbar(int x, int y, int h, int total, int visible, int pos) {
 
 /* ---- windows ---------------------------------------------------------------------------- */
 
+/* ---- the theme's colours ------------------------------------------------------------- */
+
+static struct theme_info palette;
+static void refresh_palette(void) { theme_get(-1, &palette); }
+uint32_t ui(int slot) { return slot >= 0 && slot < 16 ? palette.ui[slot] : 0; }
+const struct theme_info *current_theme(void) { return &palette; }
+
+uint32_t mix(uint32_t a, uint32_t b, int t) {
+    if (t <= 0) return a;
+    if (t >= 256) return b;
+    uint32_t rb = (((a & 0xff00ff) * (256 - t) + (b & 0xff00ff) * t) >> 8) & 0xff00ff;
+    uint32_t g  = (((a & 0x00ff00) * (256 - t) + (b & 0x00ff00) * t) >> 8) & 0x00ff00;
+    return rb | g;
+}
+
 int win_open(const char *title, int w, int h, int icon, int min_w, int min_h) {
+    refresh_palette();
     struct win_open o = { title, w, h, icon, min_w, min_h };
     long r = sys(SYS_WINDOW, (long)&o, 0, 0);
     if (r >= 0) target = (int)r;
@@ -87,7 +121,38 @@ int win_open(const char *title, int w, int h, int icon, int min_w, int min_h) {
 int win_event(int win, struct event *e, int wait_ms) {
     win_flush(win);                         /* whatever was drawn, show it before waiting */
     target = win;
-    return (int)sys(SYS_EVENT, win, (long)e, wait_ms);
+    int got = (int)sys(SYS_EVENT, win, (long)e, wait_ms);
+    if (got && e->type == EV_REDRAW) refresh_palette();   /* the theme changed */
+    return got;
+}
+
+void app_run(int win, const struct app_loop *a) {
+    unsigned long next_tick = uptime_ms() + a->tick_ms;
+    if (a->draw) a->draw();
+    for (;;) {
+        struct event e;
+        int wait = 1000000;
+        if (a->tick_ms) {
+            unsigned long now = uptime_ms();
+            wait = next_tick > now ? (int)(next_tick - now) : 0;
+        }
+        if (!win_event(win, &e, wait)) {               /* nothing happened: it's tick time */
+            next_tick = uptime_ms() + a->tick_ms;
+            if (a->tick) a->tick();
+            continue;
+        }
+        switch (e.type) {
+        case EV_CLOSE:  if (!a->close || a->close()) return; break;
+        case EV_KEY:    if (a->key) a->key(e.key); break;
+        case EV_MOUSE:  if (a->mouse) a->mouse(e.x, e.y, e.buttons, e.wheel); break;
+        case EV_RESIZE: if (a->resize) a->resize(e.w, e.h); else if (a->draw) a->draw(); break;
+        case EV_REDRAW: if (a->draw) a->draw(); break;
+        }
+        if (a->tick_ms && uptime_ms() >= next_tick) {  /* busy with events: still keep time */
+            next_tick = uptime_ms() + a->tick_ms;
+            if (a->tick) a->tick();
+        }
+    }
 }
 
 void win_title(int win, const char *t) { sys(SYS_WINCTL, win, WINCTL_TITLE, (long)t); }
