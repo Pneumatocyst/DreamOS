@@ -22,6 +22,7 @@ make run          # build dream.iso and boot it in QEMU (serial log in this term
 make run-uefi     # same, with UEFI firmware
 make debug        # boot paused, GDB attached, breakpoint on kmain
 make wipe-disk    # start over with a blank virtual disk
+make install      # adds a `dreamos` command: type it in any terminal to boot dream
 ```
 
 You need `gcc`, `make`, `xorriso`, `qemu` and `limine`. On Arch Linux:

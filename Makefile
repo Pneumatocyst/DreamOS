@@ -6,6 +6,7 @@
 #   make debug      boot paused and attach GDB, breakpoint on kmain
 #   make clean      remove build output (keeps disk.img)
 #   make wipe-disk  start over with a blank disk.img
+#   make install    put a `dreamos` command in ~/.local/bin (type dreamos anywhere to boot)
 
 CC      := gcc
 LD      := ld
@@ -42,7 +43,7 @@ QEMUFLAGS := -name dream -M pc -m 512M -cdrom $(ISO) -boot d \
              -drive file=$(DISK),format=raw,if=ide,index=0 \
              -serial stdio -no-reboot -no-shutdown -rtc base=localtime
 
-.PHONY: all run run-uefi debug clean wipe-disk
+.PHONY: all run run-uefi debug clean wipe-disk install uninstall
 .SECONDARY:
 
 all: $(ISO)
@@ -133,5 +134,18 @@ debug: $(ISO) $(DISK)
 
 clean:
 	rm -rf build $(ISO)
+
+# A link, not a copy: the command always runs the script in this checkout.
+BINDIR ?= $(HOME)/.local/bin
+install:
+	@mkdir -p $(BINDIR)
+	@ln -sf "$(CURDIR)/tools/dreamos" $(BINDIR)/dreamos
+	@echo "installed: $(BINDIR)/dreamos -> $(CURDIR)/tools/dreamos"
+	@case ":$$PATH:" in *":$(BINDIR):"*) echo "type 'dreamos' anywhere to boot dream.";; \
+	  *) echo "note: $(BINDIR) isn't on your PATH yet. add this to ~/.bashrc:"; \
+	     echo "  export PATH=\"$(BINDIR):\$$PATH\"";; esac
+
+uninstall:
+	rm -f $(BINDIR)/dreamos
 
 -include $(OBJS:.o=.d)

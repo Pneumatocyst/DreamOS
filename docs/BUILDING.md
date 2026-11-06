@@ -48,7 +48,26 @@ make run-uefi   # the same with UEFI firmware
 make debug      # QEMU paused, GDB attached, breakpoint on kmain
 make wipe-disk  # a fresh, blank disk.img (dream formats it on boot)
 make clean      # remove build/ and the ISO (keeps disk.img)
+make install    # put a `dreamos` command in ~/.local/bin
 ```
+
+## The `dreamos` command
+
+`make install` links `tools/dreamos` into `~/.local/bin`. After that, typing `dreamos` in
+any terminal builds dream if anything changed and boots it in QEMU:
+
+```sh
+dreamos           # boot (BIOS)
+dreamos uefi      # boot with UEFI firmware
+dreamos debug     # boot paused with GDB attached
+dreamos build     # just build
+dreamos wipe      # blank virtual disk
+```
+
+It's a link rather than a copy, so it always runs your checkout's latest version. If you
+move the dream folder, run `make install` again (or set `DREAM_DIR`). `make uninstall`
+removes it. If the shell says `command not found`, add `export PATH="$HOME/.local/bin:$PATH"`
+to `~/.bashrc` and open a new terminal.
 
 `disk.img` is a 32 MiB raw virtual hard disk. dream saves its whole file tree there
 after every change (and your settings in `/etc/dream.conf` with it), so things you

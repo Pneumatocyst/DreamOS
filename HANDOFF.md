@@ -49,7 +49,8 @@ make wipe-disk  # fresh blank disk.img (dream formats it on boot)
 make clean      # removes build/ and the ISO (keeps disk.img)
 ```
 
-- A launcher script `~/.local/bin/dream` (on PATH) runs `make run` from anywhere; `dream build`,
+- `make install` links `tools/dreamos` to `~/.local/bin/dreamos`: typing `dreamos` boots dream
+  (`dreamos uefi|debug|build|wipe|help`). Older: a launcher script `~/.local/bin/dream` (on PATH) runs `make run` from anywhere; `dream build`,
   `dream uefi`, `dream debug` too. There's also an app-launcher entry
   (`~/.local/share/applications/dream.desktop`).
 - `disk.img` (32 MiB raw, git-ignored) holds the saved filesystem across boots.

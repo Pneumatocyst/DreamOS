@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# dreamos: start dream in QEMU from anywhere.
+#
+#   dreamos           build if anything changed, then boot (BIOS)
+#   dreamos uefi      boot with UEFI firmware
+#   dreamos debug     boot paused with GDB attached
+#   dreamos build     just build dream.iso
+#   dreamos wipe      start over with a blank virtual disk
+#   dreamos help      this list
+#
+# Install with `make install` in the dream folder: that links this script into
+# ~/.local/bin, so it always runs the copy inside your checkout.
+set -euo pipefail
+
+# Find the dream checkout: $DREAM_DIR if set, otherwise the folder this script lives in.
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+dir="${DREAM_DIR:-$(dirname "$(dirname "$self")")}"
+if [[ ! -f "$dir/Makefile" || ! -d "$dir/kernel" ]]; then
+    echo "dreamos: can't find the dream source folder (looked in $dir)." >&2
+    echo "         set DREAM_DIR=/path/to/dream, or run 'make install' from the dream folder." >&2
+    exit 1
+fi
+
+case "${1:-run}" in
+    run|"")      exec make -C "$dir" --no-print-directory run ;;
+    uefi)        exec make -C "$dir" --no-print-directory run-uefi ;;
+    debug)       exec make -C "$dir" --no-print-directory debug ;;
+    build)       exec make -C "$dir" --no-print-directory ;;
+    wipe)        exec make -C "$dir" --no-print-directory wipe-disk ;;
+    help|-h|--help) sed -n '2,9p' "$self" | sed 's/^# \{0,1\}//' ;;
+    *)           echo "dreamos: unknown option '$1' (try: dreamos help)" >&2; exit 1 ;;
+esac
