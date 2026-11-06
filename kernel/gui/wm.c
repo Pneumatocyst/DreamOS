@@ -1173,6 +1173,8 @@ static void handle_mouse(struct mouse_event *e) {
                     drag->restore = (struct rect){ drag->x, drag->y, drag->w, drag->h };
                     struct rect s = snap_rect();
                     place(drag, (struct rect){ s.x, s.y, s.w, s.h - TITLE_H });
+                    if (drag->x + drag->w > screen->w - 8)        /* wider than half (its minimum size) */
+                        wm_move(drag, screen->w - 8 - drag->w, drag->y);
                 }
                 snap = SNAP_NONE;
             }
@@ -1533,4 +1535,21 @@ SH_CMD(open) {
     }
     if (!active) wm_start();
     wm_open_app(e ? e->name : path);
+}
+
+SH_CMD(wallpaper) {
+    if (argc < 2) {
+        const char *cur = config_get("wallpaper", wallpaper_names[0]);
+        for (int i = 0; i < wallpaper_count; i++)
+            kprintf("  %s%s\n", !strcmp(cur, wallpaper_names[i]) ? C_ACCENT "* " : C_DIM "  ", wallpaper_names[i]);
+        kprintf(C_DIM "usage: wallpaper <name>\n");
+        return;
+    }
+    for (int i = 0; i < wallpaper_count; i++) {
+        if (strcmp(argv[1], wallpaper_names[i])) continue;
+        config_set("wallpaper", argv[1]);
+        wm_wallpaper_changed();
+        return;
+    }
+    kerrorf(C_ERR "wallpaper" C_DIM ": no wallpaper called " C_FG "%s\n", argv[1]);
 }

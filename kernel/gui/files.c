@@ -247,10 +247,11 @@ static void draw(struct surface *s) {
         if (i == sel) gfx_round(s, LIST_X + 8, y, LIST_W - 16, ROW - 2, 8, ui(UI_SEL));
         else if (i == hover) gfx_round(s, LIST_X + 8, y, LIST_W - 16, ROW - 2, 8, ui(UI_HOVER));
         icon(s, LIST_X + 18, y + 6, kind_of(node), 18);
-        gfx_utext_fit(s, &font_ui, LIST_X + 46, y + 7, fs_get(node)->name, ui(UI_TEXT), LIST_W - 160);
         char size[24];
         size_text(size, sizeof size, node);
-        gfx_utext(s, &font_small, LIST_X + LIST_W - 22 - gfx_utext_width(&font_small, size), y + 9, size, ui(UI_DIM));
+        int sw = gfx_utext_width(&font_small, size);
+        gfx_utext(s, &font_small, LIST_X + LIST_W - 22 - sw, y + 9, size, ui(UI_DIM));
+        gfx_utext_fit(s, &font_ui, LIST_X + 46, y + 7, fs_get(node)->name, ui(UI_TEXT), LIST_W - 46 - sw - 34);
     }
     if (!nitems) gfx_utext_center(s, &font_ui, LIST_X + LIST_W / 2, BAR + 60, "this folder is empty", ui(UI_DIM));
     ui_scrollbar(s, LIST_X + LIST_W - 9, BAR + 6, H - BAR - STATUS - 12, nitems, VISIBLE, scroll);
@@ -465,7 +466,7 @@ void files_open(void) {
     W = 860; H = 500;
     w = wm_open(&files_app, "files", W, H, NULL);
     if (!w) return;
-    wm_resizable(w, 700, 320);
+    wm_resizable(w, 600, 320);
     mode = MODE_BROWSE;
     status[0] = 0;
     held = 0;

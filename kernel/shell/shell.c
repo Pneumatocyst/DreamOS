@@ -264,6 +264,7 @@ static const struct { const char *name, *help; void (*fn)(int, char **); } comma
     { "open",     "open an app or a file on the desktop", cmd_open     },
     { "notify",   "pop up a notification",                cmd_notify   },
     { "lock",     "lock the screen",                      cmd_lock     },
+    { "wallpaper", "list or switch desktop wallpapers",   cmd_wallpaper },
     { "passwd",   "set the lock screen password",         cmd_passwd   },
     { "kill",     "stop a running program by its id",     cmd_kill     },
     /* disks */
