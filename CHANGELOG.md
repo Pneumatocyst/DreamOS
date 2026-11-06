@@ -11,6 +11,12 @@
   `fileinfo`), windows (`window`, `draw`, `event`, `winctl`, `measure`) and the clipboard,
   shared through `include/dream/abi.h`. Programs send batches of drawing commands and the
   kernel draws them with the system fonts and widgets (`user/lib/gui.h`).
+- **Every app moved out of the kernel** except the terminal: files, calculator, paint,
+  monitor, settings, clock and snake are now programs in `/bin` (`user/*.c`), like notes.
+  New system calls for them: `stat`, `fsop` (mkdir/create/remove/rename), `sysinfo`,
+  `tasks`, `kill`, `config`, `theme`, `passwd`, `spawn`, `terminal`; new drawing commands
+  for gradients and wallpaper previews; and `app_run`, `ui()` and `mix()` in the GUI library.
+- Paint remembers its strokes: **ctrl+z** undo, resizable, and the picture follows theme changes.
 - **Notes moved out of the kernel**: it's now `user/notes.c`, an ordinary ring-3 program.
   Several can be open at once, and a crash in one can't take dream down.
 - **Background programs**: `prog &` in the shell; the dock, the launcher and the file

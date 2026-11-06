@@ -82,10 +82,15 @@ with `int 0x80` (rax = call number, rdi/rsi/rdx = arguments). The numbers are in
 |---|---|
 | exit, write, read, sleep, getpid, uptime | the basics |
 | readfile, writefile, listdir, fileinfo | files (whole files at a time: simple, and plenty for 1 MiB files) |
+| stat, fsop (mkdir, create, remove, rename) | more files (what the file manager needs) |
 | window, draw, event, winctl, measure | the window system (section 8) |
+| sysinfo, tasks, kill | memory, uptime, CPU, clock, disk; the task list (the monitor) |
+| config, theme, passwd | settings, themes and wallpapers, the lock screen password |
+| spawn, terminal | start a program in the background; type a command into the terminal |
 | clipboard | get or set the clipboard's text |
 
-Every pointer a program passes is checked against its own page tables first
+These live in `proc/process.c`, `gui/uwin.c` and `sys/syscalls.c`. Every app except the
+terminal is a program built on them. Every pointer a program passes is checked against its own page tables first
 (`vmm_user_ok`), and strings are copied in byte by checked byte (`user_string`).
 
 The shell normally waits for a program to finish. With `&` at the end of the line, or

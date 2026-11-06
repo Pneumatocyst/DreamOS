@@ -58,9 +58,10 @@ plain PS/2 mouse: click the window to capture it, **Ctrl+Alt+G** to let go.)
 - One **clipboard** for everything: notes, the terminal (`ctrl+v`, `copy`, `paste`) and programs
 
 **Apps**: terminal (the real shell), files, notes (text editor), calculator, paint,
-monitor (CPU/memory graphs and tasks), settings, clock, snake. Notes is an ordinary
-ring-3 program in `/bin`, drawing through the window system's system calls; more apps
-will move out of the kernel the same way.
+monitor (CPU/memory graphs and tasks), settings, clock, snake. Every app except the
+terminal is an ordinary ring-3 program in `/bin`, drawing through the window system's
+system calls, so a bug in an app can't take the system down. (The terminal stays in
+the kernel because it *is* the shell's screen.)
 
 **Under the hood**
 
@@ -117,10 +118,11 @@ kernel/gfx/gfx.c         drawing: surfaces, shapes, smooth lines, bitmap text, d
 kernel/gfx/ui.c          the modern bits: smooth text, see-through shapes, shadows, blur
 kernel/gui/wm.c          window manager + compositor + top bar + dock + launcher + lock screen
 kernel/gui/uwin.c        windows for ring-3 programs (the kernel side of user/lib/gui.c)
-kernel/gui/              terminal, files, clock, icons, wallpapers, widgets, the app list
-kernel/apps/             notes, calculator, monitor, settings, snake, paint, edit (text mode)
-kernel/sys/              config (/etc/dream.conf, passwords), CPU usage
-user/                    ring-3 programs (each .c becomes a program in /bin): notes, mandel, ...
+kernel/gui/              terminal, icons, wallpapers, widgets, the app list (which starts the /bin apps)
+kernel/apps/edit.c       the text-mode editor (`edit`)
+kernel/sys/              config (/etc/dream.conf, passwords), clipboard, CPU usage, syscalls for apps
+user/                    ring-3 programs (each .c becomes a program in /bin): the apps (files, notes,
+                         calculator, paint, monitor, settings, clock, snake) and small ones (mandel, hi...)
 user/lib/                their tiny libc (dream.h) and window library (gui.h)
 tools/mkfont.py          turns the Inter font into bitmaps the kernel can draw
 tools/qemu_drive.py      drives QEMU headlessly: type, click, take screenshots
@@ -131,7 +133,6 @@ Suggested reading order: `main.c` → `arch/idt.c` + `arch/isr.S` → `drivers/c
 
 ## Roadmap ideas
 
-- Move the remaining built-in apps (calculator, files, settings...) out to `/bin`
 - `syscall`/`sysret`; a spawn system call so programs can start programs
 - Several terminals
 - Read a real filesystem (FAT or ext2), and CDs (ATAPI)

@@ -129,17 +129,38 @@ Events (`struct event`, see `include/dream/abi.h`):
 
 Colours: `0xRRGGBB`, or `COLOR_UI(UI_TEXT)`, `COLOR_UI(UI_ACCENT)` and so on to follow the theme.
 
-Files: `readfile`, `writefile` (creates or replaces), `listdir` (one name per line, folders
-end in `/`) and `fileinfo` (size, `FILE_IS_DIR`, or -1). The clipboard: `clip_get`, `clip_set`.
+Instead of writing the event loop yourself, `app_run` can do it and call you back:
+
+```c
+app_run(win, &(struct app_loop){ .draw = draw, .key = key, .mouse = mouse,
+                                 .tick = tick, .tick_ms = 100 });   /* returns on close */
+```
+
+`ui(UI_TEXT)` etc. give the theme's colours as real `0xRRGGBB` values (kept current
+when the theme changes), and `mix(a, b, t)` blends two, for shades the slots don't have.
+
+Everything else a program can ask for (all in `user/lib/dream.h`):
+
+| area | functions |
+|---|---|
+| files | `readfile`, `writefile`, `listdir`, `fileinfo`, `stat`, `mkdir`, `create`, `remove`, `rename`, `fs_error` |
+| the system | `sysinfo` (memory, uptime, CPU, clock, disk, screen...), `tasks`, `kill` |
+| settings | `config_get`, `config_set` (`/etc/dream.conf`), `theme_get`, `theme_set`, `wallpaper_name`, `wallpaper_set`, `passwd_isset`, `passwd_set` |
+| other programs | `spawn` (start one in the background), `terminal_run` (type a command into the terminal) |
+| the clipboard | `clip_get`, `clip_set` |
+
+All the apps in `user/` are complete examples: `calculator.c` and `clock.c` are short,
+`files.c` uses the file calls, `monitor.c` the system ones, `settings.c` the theme and
+config ones, and `paint.c` keeps its strokes so it can redraw (and undo).
 
 To put it in the dock and the launcher, add a launcher function next to `notes_open` in
 `kernel/gui/apps.c` that calls `program_start("clicker", ...)`, and a row in `app_list`.
 
 ## 4. A built-in desktop app (kernel side)
 
-The older way, still used by files, settings, the calculator and the rest: the app is
-part of the kernel. It's faster to write (no system calls) but a bug in it is a bug in
-the kernel. New apps should be programs (section 3).
+The older way: the app is part of the kernel. Only the terminal works like this now
+(it has to: it's the shell's own screen). It's quicker to write, with no system calls,
+but a bug in it is a bug in the kernel, so new apps should be programs (section 3).
 
 ### Writing one
 
@@ -233,6 +254,4 @@ handle `resize`.
 - tell the user something: `wm_notify("title", "message")`
 - remember something across reboots: `config_set("key", "value")`, `config_get("key", "default")`
 
-The existing apps are good examples: `apps/calc.c` is small and self-contained,
-`apps/notes.c` shows keyboard handling and files, `apps/monitor.c` shows live data and
-graphs, and `apps/settings.c` shows a sidebar with pages.
+`gui/term.c` is the one example left in the kernel.

@@ -234,5 +234,11 @@ Window system for ring-3 programs (done right after the FPU work):
   gui/apps.c start it (or raise an existing notes window via wm_find_icon).
 - Clipboard: `kernel/sys/clipboard.c` (64 KiB, mutex), SYS_CLIPBOARD, shell `copy`/`paste`,
   ctrl+v at the prompt, notes selection (drag, ctrl+a/c/x/v).
-Next ideas from Lynwood's list: move calculator/files/settings to /bin, shell scripts,
+All apps moved to /bin after that (only the terminal stays in the kernel): user/calculator.c,
+clock.c, snake.c, monitor.c, paint.c (keeps strokes: undo, resize), settings.c (`settings about`),
+files.c (`files /path`). kernel/sys/syscalls.c has their syscalls (stat, fsop, sysinfo, tasks,
+config, theme, passwd, spawn, terminal; kill is task_kill). gui/apps.c launches them
+(open_app: raise by icon or program_start). user lib: app_run loop, ui()/mix() theme colours
+(refreshed on EV_REDRAW), draw_gradient/draw_wallpaper/draw_toggle/draw_text_center.
+Next ideas from Lynwood's list: shell scripts,
 FAT32, guide app, screenshot + image viewer, todo app, log viewer, small shell tools.
