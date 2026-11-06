@@ -116,8 +116,8 @@ kmain (kernel/main.c)
 - `user/lib/`: `crt0.S` (_start → main → exit), `dream.c/.h` tiny libc: syscall wrappers,
   `printf` (%d %u %x %s %c %p), `puts`, `getchar`, `readline` (with echo), `atoi`, `rand`, string fns,
   colour macros.
-- `user/user.ld`: programs linked at 0x400000. Built with `-mno-sse` (the kernel doesn't save
-  FPU/SSE state on task switches).
+- `user/user.ld`: programs linked at 0x400000. Built WITH floating point since
+  the FPU commit (the scheduler saves each task's FPU/SSE state).
 - **Adding a program = drop a `.c` file in `user/`.** The Makefile compiles it, generates
   `build/userbins.S` (incbin table), and the kernel copies it into `/bin` at boot. Built-ins shadow
   `/bin` names (that's why the example program is `hi`, not `hello`).
@@ -140,7 +140,7 @@ Pre-git steps (same day): initial scaffold as *lumen*, Linux-style commands + pi
 ## 6. Known limitations / rough edges
 
 - One terminal; while a program runs, the terminal belongs to it (can't run `ps` meanwhile).
-- No FPU/SSE state saving → kernel and user code are compiled without SSE/floats.
+- The kernel is compiled without SSE/floats (user programs may use them).
 - ATA is PIO + polling, LBA28 (≤128 GiB); CD drives detected but unreadable.
 - dreamfs rewrites the whole tree on every save (fine at this size); no journaling.
 - The terminal window is fixed-size; windows can't be resized or minimized.
@@ -154,7 +154,6 @@ Pre-git steps (same day): initial scaffold as *lumen*, Linux-style commands + pi
 - Desktop: icon view / drag-and-drop in files, a text viewer window, resizable windows, more apps.
 - Faster syscalls with `syscall`/`sysret`; more syscalls (open/close/write files, spawn).
 - Multiple terminals / running programs in the background (`&`).
-- Saving FPU state so programs can use floating point.
 - A real on-disk filesystem (e.g., read FAT or ext2), CD (ATAPI) reading.
 - Sound (PC speaker / Sound Blaster / AC97), networking (e1000/virtio-net), a game.
 - Teaching exercises: write a new `/bin` program in `user/` (copy `user/hi.c`).
