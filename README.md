@@ -1,100 +1,130 @@
 # dream
 
-A small, good-looking x86_64 hobby OS for learning how computers really start up.
-Written in C, booted by [Limine](https://codeberg.org/Limine/Limine), run in QEMU.
+A small, good-looking x86_64 operating system, written from scratch in C to learn how
+computers really work. It boots on real PC firmware (BIOS or UEFI) with
+[Limine](https://codeberg.org/Limine/Limine) and runs in QEMU.
 
-```
-make run          # build dream.iso and boot it (serial log appears in this terminal)
+It has its own kernel, memory manager, scheduler, user mode, disk driver and filesystem,
+plus a modern desktop on top: frosted glass, a dock, a launcher, notifications,
+a lock screen, and a handful of apps.
+
+![the dream desktop](docs/screenshots/desktop.png)
+
+| | |
+|---|---|
+| ![launcher](docs/screenshots/launcher.png) | ![settings](docs/screenshots/settings.png) |
+| ![monitor](docs/screenshots/monitor.png) | ![nostromo theme with snake](docs/screenshots/nostromo.png) |
+
+## Try it
+
+```sh
+make run          # build dream.iso and boot it in QEMU (serial log in this terminal)
 make run-uefi     # same, with UEFI firmware
 make debug        # boot paused, GDB attached, breakpoint on kmain
+make wipe-disk    # start over with a blank virtual disk
 ```
 
-Needs: `gcc make limine xorriso qemu` →
-`sudo pacman -S --needed qemu-desktop libisoburn edk2-ovmf`
+You need `gcc`, `make`, `xorriso`, `qemu` and `limine`. On Arch Linux:
 
-## What's in it (v0.1)
+```sh
+sudo pacman -S --needed gcc make limine qemu-desktop libisoburn edk2-ovmf
+```
 
-- **Framebuffer console**: Terminus 8x16 font, gradient background, status bar with clock
-- **4 themes**: `midnight`, `nostromo`, `cosmos`, `ember`; switch live with `theme <name>`
-- **Interrupts**: own GDT and IDT, remapped PIC, 100 Hz PIT timer, PS/2 keyboard
-- **Memory allocator**: a bitmap page allocator for physical RAM, plus `kmalloc`/`kfree`
-  (size classes for small blocks, whole pages for big ones). `free`, `memtest`
-- **ATA disk driver** (PIO): finds IDE disks and CD drives, reads and writes sectors
-- **dreamfs**: the file tree is saved to `disk.img` after every change and restored at boot.
-  Layout: sector 0 superblock, 1-28 node table, 29+ file data. `make wipe-disk` starts fresh.
-- **Shell** with pipes `|`, redirects `>` `>>`, `;`, `&&`, "quotes" and history
-  - files: `ls cd pwd tree mkdir touch cat cp mv rm rmdir`
-  - text: `echo grep head tail wc`
-  - disks: `lsblk blkread blkwrite hexdump sync mkfs`
-  - system: `uname hostname whoami date uptime free mem lscpu dmesg history sleep`
-  - dream: `help fetch theme clear hello crash reboot shutdown`
-- **edit** (also `nano`): full-screen editor with line numbers, auto-indent, cut/paste,
-  find and go-to-line. ^S save, ^Q quit, ^K cut, ^U paste, ^F find, ^G go to line
-- **PS/2 mouse** with scroll wheel. In QEMU, click into the window to capture the mouse;
-  Ctrl+Alt+G releases it
-- **Desktop** (`startx`, leave with `exit`): double-buffered compositor with a wallpaper,
-  draggable windows with rounded corners and shadows, a top panel with app buttons and
-  a clock. Apps: terminal (the real shell), files, paint, clock, about. Follows the theme.
-- **File browser** (`files`, or the panel): folders and files with icons and sizes, a
-  preview pane, new folder / new file / rename / delete, keyboard or mouse. Opening a
-  text file edits it in the terminal; opening a program runs it there. Updates live.
-- **Multitasking**: kernel tasks with their own stacks, a preemptive round-robin scheduler
-  (10 ms slices off the timer), sleeping, and an idle task. The shell and the desktop run
-  side by side; `ps` lists tasks and their CPU time
-- **User mode**: programs run in ring 3, each in its own address space (4-level page
-  tables, kernel half shared but not user-accessible). TSS for ring 3 -> 0, `int 0x80`
-  system calls with checked user pointers, an ELF loader, argc/argv, pipes into programs,
-  Ctrl+C. A crashing program gets a "segmentation fault"; the kernel carries on.
-  Programs live in `user/`, get built separately and installed into `/bin` at boot:
-  `hi`, `counter`, `spin`, `crashme`, `upper`, `guess`
-- **Panic screen** with a register dump. Try `crash pf`, then `addr2line` the RIP.
-- **Serial log** mirrored to your terminal
+On Debian/Ubuntu, and for more detail, see [docs/BUILDING.md](docs/BUILDING.md).
+
+In the QEMU window, click to give dream the mouse; **Ctrl+Alt+G** takes it back.
+
+## What's in it (v0.2)
+
+**The desktop** ([guide](docs/DESKTOP.md))
+
+- Frosted-glass **top bar**: the moon opens the launcher; then the focused app's name,
+  a clock (click it for a calendar), a live CPU graph, and a power menu
+  (lock, leave desktop, restart, shut down)
+- A **dock** with app icons and running indicators. Clicking an open app raises it,
+  or minimizes it if it's already in front
+- **Windows** you can minimize, maximize, close and resize, with soft shadows and fades.
+  Double-click a title bar to maximize, or drag a window to a screen edge to snap it to half
+- A **launcher** (super key): search as you type
+- **Notifications**, a right-click **desktop menu**, an **alt+tab** switcher
+- A **lock screen** with a big clock and an optional password
+- 4 themes (`midnight`, `nostromo`, `cosmos`, `ember`) and 5 wallpapers drawn from maths
+  (`aurora`, `dunes`, `glow`, `nebula`, `plain`), all switchable live
+- Smooth anti-aliased text, set in [Inter](https://rsms.me/inter/)
+- Settings are saved in `/etc/dream.conf`, so they survive a reboot
+
+**Apps**: terminal (the real shell), files, notes (text editor), calculator, paint,
+monitor (CPU/memory graphs and tasks), settings, clock, snake.
+
+**Under the hood**
+
+- **Boot**: Limine, higher-half kernel, own GDT/IDT, remapped PIC, 100 Hz PIT
+- **Memory**: bitmap page allocator, `kmalloc`/`kfree`, 4-level page tables
+- **Multitasking**: preemptive round-robin scheduler, 10 ms time slices, sleeping, mutexes
+- **User mode**: ring-3 programs in their own address spaces, ELF loader, `int 0x80`
+  system calls with checked pointers. A crashing program gets a "segmentation fault";
+  dream carries on
+- **Storage**: ATA (IDE) disk driver; *dreamfs* saves the whole file tree to disk after
+  every change and restores it at boot
+- **Shell** with pipes `|`, redirects `>` `>>`, `;`, `&&`, quotes and history. About
+  50 commands: `ls cd cat grep head tail wc tree cp mv rm ps kill free date uname fetch`...
+  and desktop ones like `open`, `notify`, `lock`, `theme`, `wallpaper`
+- **Drivers**: framebuffer (double buffered), PS/2 keyboard and mouse (with wheel),
+  CMOS clock, serial port
+- A red **panic screen** with a register dump
+
+## Keyboard shortcuts
+
+| keys | does |
+|---|---|
+| super | open the launcher |
+| alt + tab | switch windows |
+| alt + f4 | close the window |
+| f11 | maximize / restore |
+| ctrl + alt + t | terminal |
+| ctrl + c | stop the running program (terminal) |
+
+## Documentation
+
+- [docs/DESKTOP.md](docs/DESKTOP.md): using the desktop and the apps
+- [docs/BUILDING.md](docs/BUILDING.md): building, running, debugging, automated screenshots
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it all fits together, from power-on to pixels
+- [docs/WRITING-APPS.md](docs/WRITING-APPS.md): add a shell command, a ring-3 program, or a desktop app
+- [CHANGELOG.md](CHANGELOG.md): what changed in each version
 
 ## Map of the source
 
 ```
 kernel/main.c            boot sequence, Limine requests, memory map
-kernel/arch/             the CPU: gdt, idt + isr.S stubs, pic, pit, port I/O
-kernel/drivers/          fb (pixels + glyphs), console (text grid), theme, keyboard, serial
-kernel/lib/              string, printf, the embedded font
-kernel/mm/pmm.c          physical page allocator (one bit per 4 KiB page)
-kernel/mm/heap.c         kmalloc / kfree
-kernel/drivers/ata.c     the disk driver
-kernel/fs/ramfs.c        the in-memory file tree
-kernel/fs/diskfs.c       saving/loading that tree to disk (dreamfs)
-kernel/shell/shell.c     line editor, pipes/redirects, command table; add commands here
-kernel/shell/cmd_*.c     the Linux-style commands
-kernel/apps/edit.c       the text editor
-kernel/gfx/gfx.c         drawing: surfaces, shapes, smooth lines, text, clipping, damage
-kernel/mm/vmm.c          page tables: per-program address spaces
-kernel/proc/process.c    ELF loader, system calls, killing crashed programs
-kernel/arch/user.S       the door into ring 3 (iretq)
-user/lib/                the tiny C library programs link against (syscalls, printf...)
-user/*.c                 the programs. add a .c file here and it appears in /bin
-kernel/sched/task.c      tasks and the scheduler
-kernel/sched/switch.S    the context switch (16 instructions)
-kernel/gui/wm.c          window manager + compositor + panel (runs as the "desktop" task)
-kernel/gui/term.c        the terminal window (the shell draws into it)
-kernel/gui/files.c       the file browser
-kernel/gui/clock.c       analog clock          kernel/gui/about.c   about window
-kernel/apps/paint.c      the paint program
-kernel/drivers/mouse.c   the mouse driver
-kernel/panic.c           the red screen
-linker.ld                where everything is placed in memory (higher half)
+kernel/arch/             the CPU: gdt, idt + isr.S stubs, pic, pit, port I/O, user.S (into ring 3)
+kernel/mm/               pmm (physical pages), heap (kmalloc), vmm (page tables)
+kernel/sched/            tasks, the scheduler, the context switch (switch.S)
+kernel/proc/process.c    ELF loader, system calls, stopping crashed programs
+kernel/drivers/          fb, console, theme, keyboard, mouse, ata (disk), rtc, serial
+kernel/fs/               ramfs (the file tree in memory), diskfs (saving it to disk)
+kernel/shell/            the shell and its commands
+kernel/gfx/gfx.c         drawing: surfaces, shapes, smooth lines, bitmap text, damage
+kernel/gfx/ui.c          the modern bits: smooth text, see-through shapes, shadows, blur
+kernel/gui/wm.c          window manager + compositor + top bar + dock + launcher + lock screen
+kernel/gui/              terminal, files, clock, icons, wallpapers, widgets, the app list
+kernel/apps/             notes, calculator, monitor, settings, snake, paint, edit (text mode)
+kernel/sys/              config (/etc/dream.conf, passwords), CPU usage
+user/                    ring-3 programs (each .c becomes a program in /bin) + their tiny libc
+tools/mkfont.py          turns the Inter font into bitmaps the kernel can draw
+tools/qemu_drive.py      drives QEMU headlessly: type, click, take screenshots
 ```
 
-Suggested reading order: `main.c` → `arch/idt.c` + `arch/isr.S` → `drivers/console.c` → `shell/shell.c`.
+Suggested reading order: `main.c` → `arch/idt.c` + `arch/isr.S` → `drivers/console.c` →
+`shell/shell.c` → `sched/task.c` → `proc/process.c` → `gui/wm.c`.
 
-## Roadmap: one lesson per step
+## Roadmap ideas
 
-1. **Your own command.** Add a `color` or `cowsay` command to `shell.c`.
-2. ~~**Physical memory manager.**~~ done A bitmap of free 4 KiB frames built from the memory map; `mem` shows free/used.
-3. ~~**Kernel heap.**~~ done `kmalloc` / `kfree` on top of the frame allocator.
-4. **Paging.** Build your own page tables instead of Limine's; map and unmap pages.
-5. ~~**Tasks.**~~ done Kernel threads and a round-robin scheduler driven by the PIT.
-6. ~~**User mode.**~~ done TSS, `syscall`/`sysret`, run a ring-3 program.
-7. **Files.** Load a ramdisk as a Limine module, read a tar archive, add `ls` and `cat`.
-8. ~~**Graphics.**~~ done: double buffering, mouse, windows, desktop.
+- Save FPU/SSE state on task switches, so programs can use floating point
+- `syscall`/`sysret`, and more system calls (open/write files, spawn programs)
+- Several terminals; running programs in the background with `&`
+- Read a real filesystem (FAT or ext2), and CDs (ATAPI)
+- Sound (PC speaker, AC97) and networking (e1000 or virtio-net)
+- ACPI, so `shutdown` works on real hardware too
 
 ## Resources
 
@@ -102,3 +132,9 @@ Suggested reading order: `main.c` → `arch/idt.c` + `arch/isr.S` → `drivers/c
 - *Operating Systems: Three Easy Pieces*: <https://pages.cs.wisc.edu/~remzi/OSTEP/>
 - Limine protocol: <https://codeberg.org/Limine/limine-protocol>
 - Intel SDM Vol. 3 (system programming), for when you want the real answers
+
+## Credits
+
+The desktop text is set in **Inter** by Rasmus Andersson and the Inter project authors,
+under the SIL Open Font License 1.1 (see `assets/fonts/OFL.txt`). The terminal font is
+Terminus. dream is booted by Limine.

@@ -1,8 +1,8 @@
 # dream — project handoff
 
-> Context for an AI assistant (or a person) picking up this project. Written 2026-11-05 at
-> the end of the first build session. The source code is in the accompanying zip
-> (`dream-source.zip`), which matches git commit `f4217c8` plus this file.
+> Context for an AI assistant (or a person) picking up this project. First written 2026-11-05
+> at the end of the first build session; updated 2026-11-06 after the 0.2 session (see
+> section 9). The code lives on GitHub at `Pneumatocyst/dream`.
 
 ## 1. What this is
 
@@ -17,7 +17,8 @@ explained it. All of it boots and was verified in QEMU, usually with screenshots
 - Language: C (gnu11, freestanding) + a little GNU assembler (AT&T syntax). No Rust.
 - Bootloader: **Limine** (protocol base revision 3), BIOS and UEFI ISO.
 - Emulator: **QEMU**, machine type `-M pc` (i440fx, so the legacy IDE controller exists).
-- Size: about 7,800 lines across 80 files. Local git repo, branch `main`, no remote.
+- Size: about 10,000 lines of C/assembly (plus a 4,700-line generated font table).
+  Git repo on GitHub (`Pneumatocyst/dream`, branch `main`).
 
 ## 2. How Lynwood works (important)
 
@@ -59,14 +60,18 @@ make clean      # removes build/ and the ISO (keeps disk.img)
 
 ### Headless testing (how every feature was verified)
 
-QEMU with `-display none -monitor stdio -serial file:LOG`, then pipe monitor commands in:
-`sendkey <key>` to type, `mouse_move dx dy dz` and `mouse_button N` for the mouse,
-`screendump file.ppm` for screenshots (convert with ImageMagick `magick`). A small Python
-script turned text into `sendkey` lines. Gotchas learned: keys go to the **focused window** on
-the desktop; simulated mouse positions drift ~10 px, so prefer panel buttons/keyboard; typing
-while a program runs feeds the program, not the shell.
+`tools/qemu_drive.py script.txt outdir/` boots the ISO headless with a scratch disk and plays
+a script (`wait`, `type`, `key`, `mouse`, `click`, `down`/`up`, `shot`); see docs/BUILDING.md.
+Gotchas: keys go to the **focused window** (`key ctrl-alt-t` refocuses the terminal); QEMU drops
+or scales big mouse moves, so the script moves in 40 px steps, and you should park the mouse
+with `mouse -2000 -2000` before moves you need to be exact; overshoot when dragging to an edge.
+The scratch disk persists settings between runs in the same outdir: delete `scratch.img` for
+a clean boot.
 
 ## 4. Architecture (what exists, in boot order)
+
+(See docs/ARCHITECTURE.md for the long version. The table below was written for 0.1;
+section 9 lists what 0.2 added.)
 
 ```
 kmain (kernel/main.c)
@@ -162,3 +167,35 @@ Pre-git steps (same day): initial scaffold as *lumen*, Linux-style commands + pi
 - Kernel is freestanding: no libc; use `kprintf`, `snprintf`, `kmalloc`, the `str*` in `lib/string.c`.
 - Never touch the user's `disk.img` in tests; use a scratch image.
 - UI text is lower-case and friendly ("dream is fine."); colours come from the theme palette.
+
+## 9. The 0.2 session (2026-11-06, Claude Code on the web)
+
+Lynwood asked to "add the stuff normal operating systems have", make it "more modern and
+sleek", and put it on GitHub with documentation. Built in a cloud container (Ubuntu), with
+Limine's v9.x-binary release built from source because Ubuntu doesn't package it.
+
+Added:
+- `kernel/gfx/ui.c`: anti-aliased Inter text (`gfx_utext`, fonts `font_small/ui/bold/title/big/display`,
+  generated into `kernel/gfx/uifont_data.c` by `tools/mkfont.py`), `gfx_round_ex/_a`, `gfx_ring`,
+  `gfx_shadow`, `gfx_blur`
+- `kernel/gui/wm.c` rewritten: glass top bar (launcher, focused title, clock + calendar, CPU graph,
+  power menu), dock, min/max/close, edge resize, snap, fades, launcher, right-click menu,
+  notifications, alt+tab, lock screen. `struct app` gained `resize` and `icon`
+  (use designated initializers). `ui(UI_*)` gives theme-derived colours.
+- `gui/icons.c` (vector icons), `gui/wallpaper.c`, `gui/widgets.c`, `gui/apps.c` (the app list)
+- apps: `apps/notes.c`, `calc.c`, `monitor.c`, `settings.c`, `snake.c`; files restyled; about.c removed
+  (about is a settings page)
+- `sys/config.c`: `/etc/dream.conf` key=value settings, lock password (salted FNV-1a, /etc/passwd.dream);
+  `sys/stats.c`: CPU usage
+- keyboard: alt, super, F-keys (`KEY_SUPER`, `KEY_ALTTAB`, `KEY_ALTF4`, `KEY_F1+n`); `kbd_alt()`
+- `con_reattach` (terminal resize), `task_kill`, `power_reboot/power_off`
+- shell: `open notify lock passwd kill wallpaper`; `theme` saves; desktop autostarts at boot
+- docs/: BUILDING, DESKTOP, ARCHITECTURE, WRITING-APPS, screenshots; CHANGELOG.md
+
+Known rough edges after 0.2:
+- `theme_set` from the settings app redraws the console from the desktop task while the shell
+  task may also draw into it (tiny race, never seen to matter).
+- Paint's canvas isn't resizable (it would lose the drawing).
+- One notes window at a time (the app keeps its state in statics, like the other apps).
+- The original `edit` (text-mode editor) still exists; on the desktop, files opens notes instead.
+- The wallpaper is rebuilt on every theme change (~100 ms at 1280x800).
