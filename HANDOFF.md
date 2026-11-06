@@ -211,5 +211,28 @@ FPU (after 0.2): `sched/task.c` turns on SSE (CR0/CR4) in `fpu_init`, every `str
 `fpu_space` (512 B fxsave area, 16-aligned via `task_fpu()`), and `schedule()` does
 fxsave(prev)/fxrstor(next). User programs are built WITH floating point now; the kernel is
 still `-mno-sse`. `fputest` + `mandel` test it (verified it FAILS with the save removed).
-Next planned steps: file + window syscalls, move notes into /bin as the first user-space
-app, then a clipboard. Repo: github.com/Pneumatocyst/DreamOS.
+Repo: github.com/Pneumatocyst/DreamOS.
+
+Window system for ring-3 programs (done right after the FPU work):
+- `include/dream/abi.h`: syscall numbers, `struct win_open`, `struct event`, `struct dcmd`
+  (drawing commands), UI_*/ICON_*/GLYPH_*/KEY_* enums. Kernel (wm.h, keyboard.h, process.h)
+  and user lib both include it; USER_CFLAGS has -Iinclude.
+- `kernel/gui/uwin.c`: up to 16 program windows. sys_window -> wm_call(do_create) on the
+  desktop task; sys_draw runs a dcmd batch into the surface under `wm_surface_lock`;
+  sys_event waits on a per-window queue fed by the window's app callbacks; close = EV_CLOSE
+  (window hidden, program decides). uwin_pump (each frame) closes windows of dead programs
+  and calls process_reap. Desktop stopping kills programs with windows.
+- `wm_call(fn,arg)`: run fn on the desktop task and wait (job queue run in pump).
+- `wm_surface_lock` is ALSO held by pump() around damage collection + compose: without
+  it, a compose could catch a half-drawn batch and the rest's damage got lost (~1/6 runs
+  showed a blank notes page). Verified 0/24 failures after.
+- Background programs: `program_start(name, argc, argv)` (process.c), `p->detached`,
+  output -> serial, `process_reap()`. Shell: trailing `&`.
+- User lib: `user/lib/gui.{h,c}` (batching draw_* + win_*), dream.c gained writefile/
+  listdir/fileinfo/clip_get/clip_set/snprintf.
+- Notes is `user/notes.c` (kernel/apps/notes.c deleted); `notes_open`/`notes_open_file` in
+  gui/apps.c start it (or raise an existing notes window via wm_find_icon).
+- Clipboard: `kernel/sys/clipboard.c` (64 KiB, mutex), SYS_CLIPBOARD, shell `copy`/`paste`,
+  ctrl+v at the prompt, notes selection (drag, ctrl+a/c/x/v).
+Next ideas from Lynwood's list: move calculator/files/settings to /bin, shell scripts,
+FAT32, guide app, screenshot + image viewer, todo app, log viewer, small shell tools.

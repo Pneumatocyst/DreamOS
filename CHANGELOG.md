@@ -7,6 +7,21 @@
   compiled with floating point, and their `printf` understands `%f` / `%.2f`.
 - New program `mandel` (the Mandelbrot set in colour, with doubles) and a `fputest`
   command that proves tasks keep their own FPU registers.
+- **Programs can open windows.** New system calls for files (`writefile`, `listdir`,
+  `fileinfo`), windows (`window`, `draw`, `event`, `winctl`, `measure`) and the clipboard,
+  shared through `include/dream/abi.h`. Programs send batches of drawing commands and the
+  kernel draws them with the system fonts and widgets (`user/lib/gui.h`).
+- **Notes moved out of the kernel**: it's now `user/notes.c`, an ordinary ring-3 program.
+  Several can be open at once, and a crash in one can't take dream down.
+- **Background programs**: `prog &` in the shell; the dock, the launcher and the file
+  manager start programs in the background too. Their output goes to the serial log.
+- **Clipboard**: select, copy, cut and paste in notes; `ctrl+v` at the shell prompt;
+  `copy` and `paste` commands.
+- `snprintf` and `%f` in the user C library.
+- Fix: the desktop could copy a program's window to the screen halfway through a batch of
+  drawing and then miss the rest, leaving a blank page (about 1 time in 6). The compositor
+  now holds the surface lock while it collects damage and composes.
+- The welcome `readme.txt` no longer claims files vanish on reboot.
 - The mouse uses QEMU's absolute "vmmouse" when available, so it works without capture.
 - `dreamos` command (`make install`).
 

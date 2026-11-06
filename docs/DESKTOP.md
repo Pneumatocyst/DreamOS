@@ -95,13 +95,22 @@ itself. (The hash is a simple one, fine for learning, not for guarding secrets.)
 |---|---|
 | **terminal** | the real dream shell. Every command works here, and the window can be resized |
 | **files** | browse folders, with places on the left (home, programs, settings, everything) and a preview on the right. New folder, new file, rename and delete are in the toolbar. Double-click to open: folders open, text files open in notes, programs run in the terminal. Keys: arrows, enter, backspace (up a folder), delete |
-| **notes** | a text editor with line numbers and auto-indent. **ctrl+s** saves (it asks where the first time), **ctrl+o** opens a file by path, **ctrl+n** starts a new note |
+| **notes** | a text editor with line numbers and auto-indent. **ctrl+s** saves (it asks where the first time), **ctrl+o** opens a file by path, **ctrl+n** starts a new note. Drag to select; **ctrl+a/c/x/v** select all, copy, cut, paste. It's an ordinary program in `/bin` (try `notes todo.txt &`), so several can be open at once |
 | **calculator** | + − × ÷ and percentages with up to six decimal places. Works with the keyboard too: digits, `+ - * /`, enter, backspace, `c` or esc to clear |
 | **paint** | draw with the left button, erase with the right. The scroll wheel (or `[` `]`) changes the brush size |
 | **monitor** | CPU and memory over the last half minute, uptime, and every task with its share of the CPU. Select a user program and press **end task** to stop it |
 | **settings** | appearance (theme, wallpaper), desktop (start at boot, the list of shortcuts), system (computer name, password, storage) and about |
 | **clock** | an analog clock |
 | **snake** | arrow keys to steer, space to pause, enter to play again. The walls wrap around. Your best score is saved |
+
+## Copy and paste
+
+There's one clipboard for everything:
+
+- **notes**: drag to select, then **ctrl+c** copy, **ctrl+x** cut, **ctrl+v** paste, **ctrl+a** select all
+- **terminal**: **ctrl+v** pastes (the first line) at the prompt. To copy, pipe into
+  `copy`: `pwd | copy`, `cat todo.txt | copy`, or `copy some words`
+- `paste` prints the clipboard, so `paste > file.txt` saves it
 
 ## Themes and wallpapers
 

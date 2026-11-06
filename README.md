@@ -55,9 +55,12 @@ plain PS/2 mouse: click the window to capture it, **Ctrl+Alt+G** to let go.)
   (`aurora`, `dunes`, `glow`, `nebula`, `plain`), all switchable live
 - Smooth anti-aliased text, set in [Inter](https://rsms.me/inter/)
 - Settings are saved in `/etc/dream.conf`, so they survive a reboot
+- One **clipboard** for everything: notes, the terminal (`ctrl+v`, `copy`, `paste`) and programs
 
 **Apps**: terminal (the real shell), files, notes (text editor), calculator, paint,
-monitor (CPU/memory graphs and tasks), settings, clock, snake.
+monitor (CPU/memory graphs and tasks), settings, clock, snake. Notes is an ordinary
+ring-3 program in `/bin`, drawing through the window system's system calls; more apps
+will move out of the kernel the same way.
 
 **Under the hood**
 
@@ -65,7 +68,8 @@ monitor (CPU/memory graphs and tasks), settings, clock, snake.
 - **Memory**: bitmap page allocator, `kmalloc`/`kfree`, 4-level page tables
 - **Multitasking**: preemptive round-robin scheduler, 10 ms time slices, sleeping, mutexes
 - **User mode**: ring-3 programs in their own address spaces, ELF loader, `int 0x80`
-  system calls with checked pointers, floating point (each task's FPU/SSE registers are
+  system calls with checked pointers, files, windows and the clipboard from user space,
+  background programs (`prog &`), floating point (each task's FPU/SSE registers are
   saved on every switch; try `mandel`). A crashing program gets a "segmentation fault";
   dream carries on
 - **Storage**: ATA (IDE) disk driver; *dreamfs* saves the whole file tree to disk after
@@ -104,17 +108,20 @@ kernel/main.c            boot sequence, Limine requests, memory map
 kernel/arch/             the CPU: gdt, idt + isr.S stubs, pic, pit, port I/O, user.S (into ring 3)
 kernel/mm/               pmm (physical pages), heap (kmalloc), vmm (page tables)
 kernel/sched/            tasks, the scheduler, the context switch (switch.S)
-kernel/proc/process.c    ELF loader, system calls, stopping crashed programs
+kernel/proc/process.c    ELF loader, system calls, background programs, stopping crashed programs
+include/dream/abi.h      what the kernel and programs agree on: system calls, events, drawing commands
 kernel/drivers/          fb, console, theme, keyboard, mouse, ata (disk), rtc, serial
 kernel/fs/               ramfs (the file tree in memory), diskfs (saving it to disk)
 kernel/shell/            the shell and its commands
 kernel/gfx/gfx.c         drawing: surfaces, shapes, smooth lines, bitmap text, damage
 kernel/gfx/ui.c          the modern bits: smooth text, see-through shapes, shadows, blur
 kernel/gui/wm.c          window manager + compositor + top bar + dock + launcher + lock screen
+kernel/gui/uwin.c        windows for ring-3 programs (the kernel side of user/lib/gui.c)
 kernel/gui/              terminal, files, clock, icons, wallpapers, widgets, the app list
 kernel/apps/             notes, calculator, monitor, settings, snake, paint, edit (text mode)
 kernel/sys/              config (/etc/dream.conf, passwords), CPU usage
-user/                    ring-3 programs (each .c becomes a program in /bin) + their tiny libc
+user/                    ring-3 programs (each .c becomes a program in /bin): notes, mandel, ...
+user/lib/                their tiny libc (dream.h) and window library (gui.h)
 tools/mkfont.py          turns the Inter font into bitmaps the kernel can draw
 tools/qemu_drive.py      drives QEMU headlessly: type, click, take screenshots
 ```
@@ -124,8 +131,9 @@ Suggested reading order: `main.c` → `arch/idt.c` + `arch/isr.S` → `drivers/c
 
 ## Roadmap ideas
 
-- `syscall`/`sysret`, and more system calls (open/write files, spawn programs)
-- Several terminals; running programs in the background with `&`
+- Move the remaining built-in apps (calculator, files, settings...) out to `/bin`
+- `syscall`/`sysret`; a spawn system call so programs can start programs
+- Several terminals
 - Read a real filesystem (FAT or ext2), and CDs (ATAPI)
 - Sound (PC speaker, AC97) and networking (e1000 or virtio-net)
 - ACPI, so `shutdown` works on real hardware too

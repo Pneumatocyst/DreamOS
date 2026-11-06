@@ -65,7 +65,7 @@ checks it: a background task parks a value in `xmm0` while `mandel` does float m
 Tasks share data through `struct mutex` (wait by yielding) or, for tiny critical sections,
 by turning interrupts off (`irq_save`/`irq_restore`). dream runs on one CPU, so that's enough.
 
-Usually three tasks run: **shell**, **desktop** and **idle**. A user program adds one more.
+Usually three tasks run: **shell**, **desktop** and **idle**. Each running program adds one more.
 
 ## 5. User programs (`kernel/proc/`, `user/`)
 
@@ -75,9 +75,23 @@ Programs in `user/*.c` are compiled separately against `user/lib` (a tiny libc),
 Running one (`process_spawn`): create a page table, load the ELF's segments, map a stack
 at the top of the lower half with `argc`/`argv` on it, make a task, and drop into ring 3
 with `iretq` (`arch/user.S`). From then on the program can only ask the kernel for things
-with `int 0x80` (rax = call number, rdi/rsi/rdx = arguments): exit, write, read, sleep,
-getpid, uptime, readfile. Every pointer a program passes is checked against its own page
-tables first (`vmm_user_ok`).
+with `int 0x80` (rax = call number, rdi/rsi/rdx = arguments). The numbers are in
+`include/dream/abi.h`, which the kernel and programs share:
+
+| calls | for |
+|---|---|
+| exit, write, read, sleep, getpid, uptime | the basics |
+| readfile, writefile, listdir, fileinfo | files (whole files at a time: simple, and plenty for 1 MiB files) |
+| window, draw, event, winctl, measure | the window system (section 8) |
+| clipboard | get or set the clipboard's text |
+
+Every pointer a program passes is checked against its own page tables first
+(`vmm_user_ok`), and strings are copied in byte by checked byte (`user_string`).
+
+The shell normally waits for a program to finish. With `&` at the end of the line, or
+when the desktop starts one (the dock, the launcher, opening a file), it runs in the
+**background** instead: `program_start` marks it detached, its output goes to the serial
+log, and `process_reap` frees it after it ends.
 
 If a program touches memory it shouldn't, the CPU raises a fault in ring 3. Instead of
 panicking, dream prints "segmentation fault", ends that program and carries on. Ctrl+C
@@ -151,6 +165,29 @@ Opening, closing and minimizing fade the window over four frames.
 Other tasks never touch windows directly. The shell asks the desktop for things through a
 small **mailbox** (`wm_post`, `wm_notify`, `wm_open_app`) and the desktop does them on
 its own task, so no locks are needed around the window list.
+
+### Windows for programs (`gui/uwin.c`)
+
+A ring-3 program can't touch the window list, so it works the way an X11 or Wayland
+client talks to its display server:
+
+1. `SYS_WINDOW` asks for a window. The program's task can't create it directly (the
+   window list belongs to the desktop task), so it hands the job over with `wm_call`
+   and waits a frame for it to be done. It gets back a handle, a small number.
+2. `SYS_DRAW` sends a batch of drawing commands (`struct dcmd`: fill, rounded box, text,
+   button...). The kernel runs them into the window's surface with its own fonts and
+   colours, so programs stay small and look like everything else.
+3. `SYS_EVENT` waits for keys, clicks, resizes and the close button. The window's
+   callbacks (run by the desktop task) push events into a little queue per window.
+
+Programs draw from their own tasks, so **`wm_surface_lock`** keeps them and the
+desktop apart: a program holds it for a whole batch, and the desktop holds it while it
+collects damage and composes, and while it swaps a surface (resize) or frees one
+(close). Without it, the desktop could copy a window to the screen halfway through a
+batch and never notice the rest (that bug happened, and this lock is the fix).
+
+When a program ends, its windows are closed on the next frame; when the desktop stops,
+programs with windows are stopped too.
 
 The **terminal** is the shell's console, retargeted to draw into a window's surface.
 The shell reads keys from the terminal's queue instead of the keyboard. It doesn't know
