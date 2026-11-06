@@ -34,10 +34,10 @@ OBJS    := $(SRCS:%=build/%.o) build/userbins.S.o
 # Unlike the kernel, they may use floating point: the scheduler saves FPU state.
 USER_CFLAGS := -std=gnu11 -O2 -pipe -Wall -Wextra -ffreestanding -fno-stack-protector \
                -fno-pic -fno-pie -m64 -march=x86-64 \
-               -fno-builtin -Iuser/lib
+               -fno-builtin -Iuser/lib -Iinclude
 USER_PROGS  := $(basename $(notdir $(wildcard user/*.c)))
 USER_ELFS   := $(USER_PROGS:%=build/user/%.elf)
-USER_LIB    := build/user/lib/crt0.o build/user/lib/dream.o
+USER_LIB    := build/user/lib/crt0.o build/user/lib/dream.o build/user/lib/gui.o
 
 # "pc" is the classic PC chipset: its IDE controller is what drivers/ata.c speaks.
 QEMUFLAGS := -name dream -M pc -m 512M -cdrom $(ISO) -boot d \
@@ -54,7 +54,7 @@ build/%.c.o: %.c
 	@echo "  CC   $<"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-build/user/lib/%.o: user/lib/%.c user/lib/dream.h
+build/user/lib/%.o: user/lib/%.c user/lib/dream.h user/lib/gui.h include/dream/abi.h
 	@mkdir -p $(@D)
 	@echo "  CC   $< (user)"
 	@$(CC) $(USER_CFLAGS) -c $< -o $@
@@ -64,7 +64,7 @@ build/user/lib/%.o: user/lib/%.S
 	@echo "  AS   $< (user)"
 	@$(CC) $(USER_CFLAGS) -c $< -o $@
 
-build/user/%.o: user/%.c user/lib/dream.h
+build/user/%.o: user/%.c user/lib/dream.h user/lib/gui.h include/dream/abi.h
 	@mkdir -p $(@D)
 	@echo "  CC   $< (user)"
 	@$(CC) $(USER_CFLAGS) -c $< -o $@

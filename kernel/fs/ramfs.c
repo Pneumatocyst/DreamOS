@@ -238,11 +238,11 @@ static void do_fs_init(void) {
          "VERSION=\"" DREAM_VERSION "\"\n"
          "PRETTY_NAME=\"dream " DREAM_VERSION "\"\n"
          "HOME_URL=\"file:///home/lynwood/Projects/dream\"\n");
-    seed("/etc/motd", "everything here lives in RAM and is rebuilt on every boot.\n");
+    seed("/etc/motd", "files are kept in memory and saved to disk after every change.\n");
     seed("/root/readme.txt",
          "welcome to dream.\n"
          "\n"
-         "this filesystem lives in memory: anything you make disappears on reboot.\n"
+         "your files are saved to disk, so they're still here after a reboot.\n"
          "\n"
          "things to try:\n"
          "  ls -l /etc\n"
@@ -253,7 +253,9 @@ static void do_fs_init(void) {
          "  mkdir -p projects/os && cd projects/os\n"
          "  tree /\n"
          "  dmesg | grep PIT\n"
-         "  history | tail -n 3\n");
+         "  history | tail -n 3\n"
+         "  pwd | copy        (then ctrl+v pastes it)\n"
+         "  mandel 20 &       (runs in the background)\n");
 }
 
 /* ---- locking ------------------------------------------------------------------------

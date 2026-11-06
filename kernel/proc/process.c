@@ -7,6 +7,9 @@
 #include "sched/task.h"
 #include "fs/ramfs.h"
 #include "shell/shell.h"
+#include "fs/diskfs.h"
+#include "drivers/serial.h"
+#include "gui/wm.h"
 
 #define STACK_TOP   0x00007ffffffff000ull
 #define STACK_SIZE  (64 * 1024)
@@ -116,6 +119,44 @@ void process_key(struct process *p, int key) {
 
 void process_free(struct process *p) { kfree(p); }
 
+/* ---- background programs ----------------------------------------------------------- */
+
+static struct process *bg;               /* every background program, running or ended */
+
+struct process *program_start(const char *name, int argc, char **argv) {
+    char path[128];
+    if (strchr(name, '/')) strlcpy(path, name, sizeof path);
+    else snprintf(path, sizeof path, "/bin/%s", name);
+    fs_lock();
+    int n = fs_lookup(sh_cwd(), path);
+    struct process *p = NULL;
+    if (n >= 0 && !fs_get(n)->dir)
+        p = process_spawn(strrchr(path, '/') + 1, fs_data(n), fs_get(n)->size, argc, argv, NULL, 0, true);
+    fs_unlock();
+    if (!p) return NULL;
+    uint64_t f = irq_save();
+    p->detached = true;
+    p->next_bg = bg;
+    bg = p;
+    irq_restore(f);
+    return p;
+}
+
+void process_reap(void) {
+    uint64_t f = irq_save();
+    for (struct process **pp = &bg; *pp; ) {
+        struct process *p = *pp;
+        if (p->done) { *pp = p->next_bg; kfree(p); }
+        else pp = &p->next_bg;
+    }
+    irq_restore(f);
+}
+
+bool program_running(const char *name) {
+    for (struct process *p = bg; p; p = p->next_bg) if (!p->done && !strcmp(p->name, name)) return true;
+    return false;
+}
+
 /* ---- ending ------------------------------------------------------------------------- */
 
 __attribute__((noreturn)) static void process_exit(int code) {
@@ -126,6 +167,7 @@ __attribute__((noreturn)) static void process_exit(int code) {
     t->cr3 = 0;
     t->proc = NULL;
     vmm_free_space(p->pml4);              /* ...then give all its memory back */
+    uwin_owner_gone(p);                   /* and its windows */
     p->exit_code = code;
     p->done = true;                       /* the shell is waiting for this */
     task_exit();
@@ -163,8 +205,74 @@ static uint64_t sys_write(struct process *p, uint64_t fd, uint64_t buf, uint64_t
     if (fd != 1 && fd != 2) return BAD;
     if (len > 65536) len = 65536;
     if (!vmm_user_ok(p->pml4, buf, len, false)) return BAD;
+    if (p->detached) {                    /* nobody's watching: it goes to the serial log */
+        for (uint64_t i = 0; i < len; i++) serial_putc(((const char *)buf)[i]);
+        return len;
+    }
     kwrite((const char *)buf, len);
     return len;
+}
+
+/* Copy a string in from user space, checking every byte. false = bad pointer. */
+bool user_string(struct process *p, uint64_t from, char *out, size_t n) {
+    for (size_t i = 0; i < n - 1; i++) {
+        if (!vmm_user_ok(p->pml4, from + i, 1, false)) return false;
+        out[i] = *(const char *)(from + i);
+        if (!out[i]) return true;
+    }
+    out[n - 1] = 0;
+    return true;
+}
+
+static uint64_t sys_writefile(struct process *p, uint64_t path, uint64_t buf, uint64_t len) {
+    char name[256];
+    if (!user_string(p, path, name, sizeof name) || len > FS_FILE_MAX) return BAD;
+    if (!vmm_user_ok(p->pml4, buf, len, false)) return BAD;
+    fs_lock();
+    int n = fs_lookup(sh_cwd(), name);
+    if (n == FS_ENOENT) n = fs_create(sh_cwd(), name, false);
+    if (n >= 0 && fs_get(n)->dir) n = FS_EISDIR;
+    if (n >= 0 && fs_write(n, (const char *)buf, len, false) < 0) n = FS_ENOSPC;
+    fs_unlock();
+    if (n < 0) return BAD;
+    diskfs_autosave();                    /* programs' files survive a reboot too */
+    return len;
+}
+
+static uint64_t sys_listdir(struct process *p, uint64_t path, uint64_t buf, uint64_t len) {
+    char name[256];
+    if (!user_string(p, path, name, sizeof name) || !vmm_user_ok(p->pml4, buf, len, true)) return BAD;
+    fs_lock();
+    int d = fs_lookup(sh_cwd(), name);
+    uint64_t used = 0;
+    if (d < 0 || !fs_get(d)->dir) { fs_unlock(); return BAD; }
+    for (int c = fs_child(d, -1); c >= 0; c = fs_child(d, c)) {
+        const char *cn = fs_get(c)->name;
+        size_t l = strlen(cn);
+        if (used + l + 2 > len) break;
+        memcpy((char *)buf + used, cn, l);
+        used += l;
+        if (fs_get(c)->dir) ((char *)buf)[used++] = '/';
+        ((char *)buf)[used++] = '\n';
+    }
+    fs_unlock();
+    return used;
+}
+
+static uint64_t sys_clipboard(struct process *p, uint64_t op, uint64_t buf, uint64_t len) {
+    if (len > CLIP_MAX) len = CLIP_MAX;
+    if (!vmm_user_ok(p->pml4, buf, len, op == CLIP_GET)) return BAD;
+    if (op == CLIP_SET) { clipboard_set((const char *)buf, len); return 0; }
+    if (op == CLIP_GET) return clipboard_get((char *)buf, len);
+    return BAD;
+}
+
+static uint64_t sys_fileinfo(struct process *p, uint64_t path) {
+    char name[256];
+    if (!user_string(p, path, name, sizeof name)) return BAD;
+    int n = fs_lookup(sh_cwd(), name);
+    if (n < 0) return BAD;
+    return fs_get(n)->dir ? (uint64_t)FILE_IS_DIR : fs_get(n)->size;
 }
 
 static uint64_t sys_read(struct process *p, uint64_t fd, uint64_t buf, uint64_t len) {
@@ -228,6 +336,15 @@ void syscall_dispatch(struct regs *r) {
     case SYS_GETPID:   r->rax = p->pid; break;
     case SYS_UPTIME:   r->rax = pit_ticks() * 1000 / pit_hz(); break;
     case SYS_READFILE: r->rax = sys_readfile(p, a, b, c); break;
+    case SYS_WRITEFILE: r->rax = sys_writefile(p, a, b, c); break;
+    case SYS_LISTDIR:  r->rax = sys_listdir(p, a, b, c); break;
+    case SYS_FILEINFO: r->rax = sys_fileinfo(p, a); break;
+    case SYS_WINDOW:   r->rax = sys_window(p, a); break;
+    case SYS_DRAW:     r->rax = sys_draw(p, a, b, c); break;
+    case SYS_EVENT:    r->rax = sys_event(p, a, b, c); break;
+    case SYS_WINCTL:   r->rax = sys_winctl(p, a, b, c); break;
+    case SYS_MEASURE:  r->rax = sys_measure(p, a, b); break;
+    case SYS_CLIPBOARD: r->rax = sys_clipboard(p, a, b, c); break;
     default:           r->rax = BAD;
     }
     if (p->killed) process_exit(130);

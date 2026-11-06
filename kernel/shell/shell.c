@@ -72,6 +72,13 @@ static void read_line(char *buf) {
         if (k == '\b') { if (len) { len--; con_putc('\b'); } continue; }
         if (k == 12)   { con_clear(); buf[0] = 0; at_prompt = false; return; }       /* ctrl+l */
         if (k == 3)    { kprintf(C_DIM "^C\n"); buf[0] = 0; at_prompt = false; return; }   /* ctrl+c */
+        if (k == 22) {                                                /* ctrl+v: paste (one line) */
+            char clip[LINE_MAX];
+            size_t n = clipboard_get(clip, sizeof clip - 1);
+            for (size_t i = 0; i < n && clip[i] != '\n' && len < LINE_MAX - 1; i++)
+                if (clip[i] >= ' ' && clip[i] < 127) { buf[len++] = clip[i]; con_putc(clip[i]); }
+            continue;
+        }
         if (k == KEY_UP && h > 0)          { replace_line(buf, &len, history[--h]); continue; }
         if (k == KEY_DOWN && h < hist_len) { h++; replace_line(buf, &len, h < hist_len ? history[h] : ""); continue; }
         if (k >= ' ' && k < 127 && len < LINE_MAX - 1) { buf[len++] = (char)k; con_putc((char)k); }
@@ -138,6 +145,8 @@ static void cmd_help(int, char **);
 static void cmd_passwd(int, char **);
 static void cmd_kill(int, char **);
 static void cmd_fputest(int, char **);
+static void cmd_copy(int, char **);
+static void cmd_paste(int, char **);
 
 static void cmd_clear(int argc, char **argv) { (void)argc; (void)argv; con_clear(); }
 
@@ -251,6 +260,8 @@ static const struct { const char *name, *help; void (*fn)(int, char **); } comma
     { "rmdir",    "remove an empty directory",            cmd_rmdir    },
     /* text */
     { "echo",     "print its arguments",                  cmd_echo     },
+    { "copy",     "put words or piped text on the clipboard", cmd_copy },
+    { "paste",    "print the clipboard",                  cmd_paste    },
     { "grep",     "lines containing a pattern",           cmd_grep     },
     { "head",     "first lines (-n N)",                   cmd_head     },
     { "tail",     "last lines (-n N)",                    cmd_tail     },
@@ -380,6 +391,16 @@ static void capture(const char *s, size_t n) {
    Ctrl+C stops it. */
 static bool run_program(int argc, char **argv) {
     char path[128];
+    if (argc > 1 && !strcmp(argv[argc - 1], "&")) {     /* `prog &`: run it in the background */
+        argv[--argc] = NULL;
+        snprintf(path, sizeof path, "%s%s", strchr(argv[0], '/') ? "" : "/bin/", argv[0]);
+        int n = fs_lookup(cwd, path);
+        if (n < 0 || fs_get(n)->dir) return false;
+        struct process *p = program_start(path, argc, argv);
+        if (p) kprintf(C_DIM "[%d] " C_FG "%s" C_DIM " is running in the background. its output goes to the serial log.\n",
+                       p->task ? p->task->id : 0, p->name);
+        return true;
+    }
     if (strchr(argv[0], '/')) strlcpy(path, argv[0], sizeof path);
     else snprintf(path, sizeof path, "/bin/%s", argv[0]);
     int n = fs_lookup(cwd, path);
@@ -533,6 +554,32 @@ static void fpu_watch(void *arg) {
     kprintf(C_OK "fputest: passed" C_DIM ", xmm0 survived 1000 trips through the scheduler\n");
 }
 
+/* copy / paste: the clipboard from the shell.  `pwd | copy`, `copy some words`, `paste > f` */
+static void cmd_copy(int argc, char **argv) {
+    if (argc > 1) {                                   /* the words themselves */
+        char text[LINE_MAX];
+        size_t n = 0;
+        for (int i = 1; i < argc; i++) n += snprintf(text + n, sizeof text - n, "%s%s", i > 1 ? " " : "", argv[i]);
+        clipboard_set(text, n < sizeof text ? n : sizeof text - 1);
+        return;
+    }
+    size_t len;
+    const char *in = sh_input(argc, argv, 99, &len);   /* whatever was piped in */
+    if (!in) return;
+    while (len && in[len - 1] == '\n') len--;          /* a trailing newline is rarely wanted */
+    clipboard_set(in, len);
+    if (sh_is_tty()) kprintf(C_DIM "copied %lu bytes.\n", (uint64_t)len);
+}
+
+static void cmd_paste(int argc, char **argv) {
+    (void)argc; (void)argv;
+    static char buf[CLIP_MAX];
+    size_t n = clipboard_get(buf, sizeof buf);
+    if (!n) { if (sh_is_tty()) kprintf(C_DIM "the clipboard is empty.\n"); return; }
+    kwrite(buf, n);
+    if (buf[n - 1] != '\n') kprintf("\n");
+}
+
 static void cmd_fputest(int argc, char **argv) {
     (void)argc; (void)argv;
     if (!task_spawn("fputest", fpu_watch, NULL)) { kerrorf(C_ERR "fputest" C_DIM ": couldn't start a task\n"); return; }
@@ -570,6 +617,7 @@ void shell_run(void) {
         memcpy(history[hist_len++], line, LINE_MAX);
 
         run_line(line);
+        if (!wm_active()) process_reap();                 /* tidy up ended background programs */
         if (!fs_get(cwd)->used || !fs_get(cwd)->dir) cwd = 0;   /* our directory vanished */
 
         /* if that changed any files, write them to disk so they survive a reboot */

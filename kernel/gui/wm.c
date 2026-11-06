@@ -830,6 +830,40 @@ static void compose(struct rect r) {
     fb_present_rect(r);
 }
 
+/* ---- other tasks asking the desktop to do things ------------------------------------------- */
+
+struct mutex wm_surface_lock;
+static struct task *desktop;
+
+struct job { void (*fn)(void *); void *arg; volatile bool done, ok; };
+static struct job *jobs[16];
+static volatile unsigned jq_head, jq_tail;
+static volatile bool stopping, stopped;
+
+bool wm_call(void (*fn)(void *), void *arg) {
+    if (!active) return false;
+    if (task_current() == desktop) { fn(arg); return true; }   /* we're already the desktop */
+    struct job j = { fn, arg, false, false };
+    uint64_t f = irq_save();
+    unsigned next = (jq_head + 1) % 16;
+    bool queued = next != jq_tail && !stopping;
+    if (queued) { jobs[jq_head] = &j; jq_head = next; }
+    irq_restore(f);
+    if (!queued) return false;
+    while (!j.done) task_sleep(5);                /* the desktop runs it within a frame */
+    return j.ok;
+}
+
+static void run_jobs(bool really) {
+    while (jq_tail != jq_head) {
+        struct job *j = jobs[jq_tail];
+        jq_tail = (jq_tail + 1) % 16;
+        if (really) j->fn(j->arg);
+        j->ok = really;
+        j->done = true;
+    }
+}
+
 /* ---- window bookkeeping ------------------------------------------------------------------------------- */
 
 static int index_of(struct window *w) {
@@ -912,11 +946,15 @@ void wm_close(struct window *w) {
     memmove(&z[i], &z[i + 1], sizeof z[0] * (nz - 1 - i));
     nz--;
     if (drag == w) drag = NULL;
+    if (switching) { switching = false; damage(switcher_rect); }  /* it might be in the list */
     if (sizing == w) sizing = NULL;
     if (pressed == w) pressed = NULL;
     if (hover_win == w) hover_win = NULL;
     if (focus == w) { focus = NULL; set_focus(topmost_visible()); }
+    mutex_lock(&wm_surface_lock);              /* a program might be drawing into it */
     surface_free(w->surf);
+    w->surf = NULL;
+    mutex_unlock(&wm_surface_lock);
     kfree(w);
     relayout_dock();
     damage(bar_rect());
@@ -954,6 +992,11 @@ void wm_set_title(struct window *w, const char *title) {
     if (w == focus) damage(bar_rect());
 }
 
+struct window *wm_find_icon(int icon) {
+    for (int i = nz - 1; i >= 0; i--) if (z[i]->app->icon == icon) return z[i];
+    return NULL;
+}
+
 struct window *wm_find(const struct app *app) {
     for (int i = 0; i < nz; i++) if (z[i]->app == app) return z[i];
     return NULL;
@@ -968,6 +1011,7 @@ static void place(struct window *w, struct rect r) {
         if (!s) return;                         /* out of memory: keep the old size */
         gfx_fill(s, 0, 0, r.w, r.h, ui(UI_BG));
         damage(outer_of(w));
+        mutex_lock(&wm_surface_lock);           /* a program might be drawing into it */
         struct surface *old = w->surf;
         uint64_t f = irq_save();                /* the shell might be drawing into it */
         w->surf = s;
@@ -977,6 +1021,7 @@ static void place(struct window *w, struct rect r) {
         if (w->app->resize) w->app->resize(w);
         else if (w->app->redraw) w->app->redraw(w);
         surface_free(old);
+        mutex_unlock(&wm_surface_lock);
     }
     damage(outer_of(w));
     w->x = r.x;
@@ -1309,7 +1354,6 @@ static void request_exit(void) {
 
 static volatile uint8_t requests[16];
 static volatile unsigned rq_head, rq_tail;
-static volatile bool stopping, stopped;
 static char open_q[4][24];
 static volatile unsigned oq_head, oq_tail;
 
@@ -1382,6 +1426,8 @@ static void pump(void) {
         place(sizing, (struct rect){ sizing->restore.x, sizing->y, pend_w, pend_h });
     }
     take_notes();
+    run_jobs(true);
+    uwin_pump();
     animate();
 
     uint64_t t = pit_ticks();
@@ -1404,7 +1450,10 @@ static void pump(void) {
     }
 
     /* windows whose contents changed (the shell draws into the terminal from its
-       own task; it just marks damage, and we pick it up here) */
+       own task; it just marks damage, and we pick it up here). Programs draw from
+       their own tasks too, holding wm_surface_lock for a whole batch; holding it
+       here means we only ever see (and show) finished frames, never half of one. */
+    mutex_lock(&wm_surface_lock);
     for (int i = 0; i < nz; i++) {
         struct surface *s = z[i]->surf;
         uint64_t f = irq_save();
@@ -1417,6 +1466,7 @@ static void pump(void) {
 
     for (int i = 0; i < ndmg; i++) compose(dmg[i]);
     ndmg = 0;
+    mutex_unlock(&wm_surface_lock);
 }
 
 static void desktop_task(void *arg) {
@@ -1427,6 +1477,8 @@ static void desktop_task(void *arg) {
         pump();
         task_sleep(10);                   /* ~100 frames a second at most; others get the CPU */
     }
+    uwin_desktop_stopping();
+    run_jobs(false);                      /* anyone still waiting: the answer is no */
     while (nz) wm_close(z[nz - 1]);
     ndmg = 0;
     stopped = true;
@@ -1462,7 +1514,8 @@ void wm_start(void) {
     term_open();                          /* the shell's console moves into this window */
     for (int i = 0; i < nz; i++) z[i]->anim = 256, z[i]->anim_step = 0;
     damage_all();
-    if (!task_spawn("desktop", desktop_task, NULL)) {
+    jq_head = jq_tail = 0;
+    if (!(desktop = task_spawn("desktop", desktop_task, NULL))) {
         kerrorf(C_ERR "startx" C_DIM ": couldn't start the desktop task\n");
         stopping = true;
         desktop_task(NULL);               /* tidy up right here */

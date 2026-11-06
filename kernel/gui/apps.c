@@ -1,7 +1,26 @@
 /* Every app on the desktop, in the order the dock and the launcher show them. */
 #include "gui/wm.h"
+#include "proc/process.h"
 
 void launcher_open(void);
+
+/* ---- apps that are programs in /bin --------------------------------------------------
+ * These aren't part of the kernel: they're ordinary user programs (see user/notes.c)
+ * started in the background. If one is already open, bring its window forward. */
+
+static void start(const char *name, const char *file) {
+    char *argv[3] = { (char *)name, (char *)file, NULL };
+    if (!program_start(name, file ? 2 : 1, argv))
+        wm_notify("couldn't start that", name);
+}
+
+void notes_open(void) {
+    struct window *w = wm_find_icon(ICON_NOTES);
+    if (w) wm_show(w);
+    else start("notes", NULL);
+}
+
+void notes_open_file(const char *path) { start("notes", path); }
 
 const struct app_entry app_list[] = {
     { "apps",       "everything, searchable",       ICON_APPS,     launcher_open, true  },

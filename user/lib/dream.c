@@ -14,7 +14,12 @@ long read(int fd, void *b, size_t n)        { return syscall3(2, fd, (long)b, n)
 void sleep_ms(unsigned long ms)             { syscall3(3, ms, 0, 0); }
 int  getpid(void)                           { return syscall3(4, 0, 0, 0); }
 unsigned long uptime_ms(void)               { return syscall3(5, 0, 0, 0); }
-long readfile(const char *p, void *b, size_t n) { return syscall3(6, (long)p, (long)b, n); }
+long readfile(const char *p, void *b, size_t n) { return syscall3(SYS_READFILE, (long)p, (long)b, n); }
+long writefile(const char *p, const void *b, size_t n) { return syscall3(SYS_WRITEFILE, (long)p, (long)b, n); }
+long listdir(const char *p, char *b, size_t n) { return syscall3(SYS_LISTDIR, (long)p, (long)b, n); }
+long clip_get(char *b, size_t n) { return syscall3(SYS_CLIPBOARD, CLIP_GET, (long)b, n); }
+void clip_set(const char *t, size_t n) { syscall3(SYS_CLIPBOARD, CLIP_SET, (long)t, n); }
+long fileinfo(const char *p) { return syscall3(SYS_FILEINFO, (long)p, 0, 0); }
 
 /* ---- strings ----------------------------------------------------------------------- */
 
@@ -43,19 +48,26 @@ void putchar(char c) {
 
 void puts(const char *s) { while (*s) putchar(*s++); flush(); }
 
+/* where formatted text goes: the screen, or a buffer (for snprintf) */
+static char *sbuf;
+static size_t slen, scap;
+static void emit(char c) {
+    if (!sbuf) { putchar(c); return; }
+    if (slen + 1 < scap) sbuf[slen] = c;
+    slen++;
+}
+
 static void put_num(unsigned long v, int base, int width, char pad) {
     char tmp[24];
     int i = 0;
     do { tmp[i++] = "0123456789abcdef"[v % base]; v /= base; } while (v);
-    while (width-- > i) putchar(pad);
-    while (i) putchar(tmp[--i]);
+    while (width-- > i) emit(pad);
+    while (i) emit(tmp[--i]);
 }
 
-int printf(const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
+static void format(const char *fmt, va_list ap) {
     for (; *fmt; fmt++) {
-        if (*fmt != '%') { putchar(*fmt); continue; }
+        if (*fmt != '%') { emit(*fmt); continue; }
         fmt++;
         char pad = ' ';
         int width = 0;
@@ -65,32 +77,52 @@ int printf(const char *fmt, ...) {
         if (*fmt == '.') { prec = 0; fmt++; while (*fmt >= '0' && *fmt <= '9') prec = prec * 10 + (*fmt++ - '0'); }
         if (*fmt == 'l') fmt++;
         switch (*fmt) {
-        case 'd': { long v = va_arg(ap, long); if (v < 0) { putchar('-'); v = -v; width--; } put_num(v, 10, width, pad); break; }
+        case 'd': { long v = va_arg(ap, long); if (v < 0) { emit('-'); v = -v; width--; } put_num(v, 10, width, pad); break; }
         case 'u': put_num(va_arg(ap, unsigned long), 10, width, pad); break;
         case 'x': put_num(va_arg(ap, unsigned long), 16, width, pad); break;
-        case 'p': putchar('0'); putchar('x'); put_num(va_arg(ap, unsigned long), 16, 16, '0'); break;
-        case 's': { const char *s = va_arg(ap, const char *); int n = strlen(s); while (*s) putchar(*s++); while (width-- > n) putchar(' '); break; }
-        case 'c': putchar((char)va_arg(ap, int)); break;
+        case 'p': emit('0'); emit('x'); put_num(va_arg(ap, unsigned long), 16, 16, '0'); break;
+        case 's': { const char *s = va_arg(ap, const char *); int n = strlen(s); while (*s) emit(*s++); while (width-- > n) emit(' '); break; }
+        case 'c': emit((char)va_arg(ap, int)); break;
         case 'f': {                      /* a double: whole part, dot, then prec digits */
             double v = va_arg(ap, double);
-            if (v < 0) { putchar('-'); v = -v; }
+            if (v < 0) { emit('-'); v = -v; }
             double round = 0.5;
             for (int i = 0; i < prec; i++) round /= 10;
             v += round;
             unsigned long whole = (unsigned long)v;
             put_num(whole, 10, 0, ' ');
-            if (prec) putchar('.');
+            if (prec) emit('.');
             v -= (double)whole;
-            for (int i = 0; i < prec; i++) { v *= 10; int d = (int)v; putchar('0' + d); v -= d; }
+            for (int i = 0; i < prec; i++) { v *= 10; int d = (int)v; emit('0' + d); v -= d; }
             break;
         }
-        case '%': putchar('%'); break;
+        case '%': emit('%'); break;
         }
     }
+}
+
+int printf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    format(fmt, ap);
     va_end(ap);
     flush();
     return 0;
 }
+
+/* Like printf, but into buf (at most n bytes, always ending in 0). */
+int snprintf(char *buf, size_t n, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    sbuf = buf; scap = n; slen = 0;
+    format(fmt, ap);
+    if (n) buf[slen < n ? slen : n - 1] = 0;
+    sbuf = NULL;
+    va_end(ap);
+    return (int)slen;
+}
+
+
 
 /* ---- input ---------------------------------------------------------------------------- */
 

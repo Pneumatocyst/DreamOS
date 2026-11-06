@@ -1,5 +1,6 @@
 #pragma once
 #include "gfx/gfx.h"
+#include <dream/abi.h>     /* UI_* colours, ICON_* / GLYPH_*, events, drawing commands */
 
 /* The window manager / compositor.
  *
@@ -47,16 +48,6 @@ struct window {
 #define WM_PANEL_H 30          /* the bar along the top of the screen */
 
 /* ---- colours every app uses, worked out from the theme ------------------------------- */
-enum {
-    UI_BG,        /* window background */
-    UI_SIDEBAR,   /* a slightly different background for side panels and toolbars */
-    UI_RAISED,    /* buttons, fields, cards */
-    UI_HOVER,     /* something under the pointer */
-    UI_LINE,      /* dividers and borders */
-    UI_SEL,       /* the selected row */
-    UI_TEXT, UI_DIM, UI_ACCENT, UI_OK, UI_WARN, UI_ERR,
-    UI_ON_ACCENT, /* text that sits on an accent-coloured button */
-};
 uint32_t ui(int which);
 
 /* small widgets drawn the same way everywhere (gui/widgets.c) */
@@ -67,14 +58,6 @@ void ui_toggle(struct surface *s, int x, int y, bool on);
 void ui_scrollbar(struct surface *s, int x, int y, int h, int total, int visible, int pos);
 
 /* ---- icons (gui/icons.c): drawn from shapes, at any size ------------------------------ */
-enum {
-    ICON_NONE, ICON_TERMINAL, ICON_FILES, ICON_NOTES, ICON_CALC, ICON_PAINT, ICON_MONITOR,
-    ICON_SETTINGS, ICON_CLOCK, ICON_SNAKE, ICON_ABOUT, ICON_APPS,
-    /* small glyphs, drawn in one colour */
-    GLYPH_FOLDER, GLYPH_FILE, GLYPH_PROGRAM, GLYPH_UP, GLYPH_HOME, GLYPH_PLUS, GLYPH_TRASH,
-    GLYPH_PEN, GLYPH_POWER, GLYPH_SEARCH, GLYPH_LOCK, GLYPH_RESTART, GLYPH_EXIT, GLYPH_SAVE,
-    GLYPH_OPEN, GLYPH_NEW, GLYPH_ROOT, GLYPH_BIN, GLYPH_PALETTE, GLYPH_INFO, GLYPH_CHIP, GLYPH_BELL,
-};
 void icon_app(struct surface *s, int icon, int x, int y, int size);            /* a coloured tile */
 void icon_glyph(struct surface *s, int glyph, int x, int y, int size, uint32_t c);
 
@@ -93,6 +76,26 @@ void wm_notify(const char *title, const char *body);   /* a pop-up card; safe fr
 void wm_open_app(const char *name);                    /* by name; safe from any task */
 void wm_lock(void);                                    /* show the lock screen */
 
+/* Run fn(arg) on the desktop task and wait for it to finish (from any other task).
+   false if the desktop isn't running. */
+bool wm_call(void (*fn)(void *), void *arg);
+
+/* Held while drawing into a window's surface from outside the desktop task, and by
+   the desktop while it swaps a surface (resize) or frees one (close). */
+#include "sched/task.h"
+extern struct mutex wm_surface_lock;
+
+/* windows for user programs (gui/uwin.c) */
+struct process;
+void uwin_pump(void);
+void uwin_owner_gone(struct process *p);
+void uwin_desktop_stopping(void);
+uint64_t sys_window(struct process *p, uint64_t req);
+uint64_t sys_draw(struct process *p, uint64_t h, uint64_t buf, uint64_t len);
+uint64_t sys_event(struct process *p, uint64_t h, uint64_t out, uint64_t wait_ms);
+uint64_t sys_winctl(struct process *p, uint64_t h, uint64_t op, uint64_t arg);
+uint64_t sys_measure(struct process *p, uint64_t font, uint64_t str);
+
 struct window *wm_open(const struct app *app, const char *title, int w, int h, void *data);
 void wm_close(struct window *w);
 void wm_show(struct window *w);
@@ -100,6 +103,7 @@ void wm_move(struct window *w, int x, int y);
 void wm_resizable(struct window *w, int min_w, int min_h);
 void wm_set_title(struct window *w, const char *title);
 struct window *wm_find(const struct app *app);
+struct window *wm_find_icon(int icon);          /* any window showing this app icon */
 void wm_theme_changed(void);   /* safe to call from any task */
 void wm_wallpaper_changed(void);
 int  wm_screen_w(void);
@@ -138,6 +142,12 @@ void config_apply(void);       /* at boot: theme etc. */
 bool passwd_set(void);
 bool passwd_check(const char *pw);
 void passwd_change(const char *pw);   /* "" removes it */
+
+/* the clipboard, shared by every app and program (sys/clipboard.c) */
+#define CLIP_MAX (64 * 1024)
+void clipboard_set(const char *text, size_t len);
+size_t clipboard_get(char *out, size_t max);     /* bytes copied */
+size_t clipboard_len(void);
 
 /* CPU usage, 0..100, over the last half second or so (sys/stats.c) */
 int  cpu_usage(void);

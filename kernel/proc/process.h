@@ -23,17 +23,24 @@ struct process {
 
     uint64_t entry, user_rsp, argv;
     int argc;
+
+    bool detached;                   /* runs in the background: nobody waits for it */
+    struct process *next_bg;         /* the list of background programs */
 };
 
-/* System call numbers (rax), with arguments in rdi, rsi, rdx; result in rax. */
-enum {
-    SYS_EXIT = 0, SYS_WRITE, SYS_READ, SYS_SLEEP, SYS_GETPID, SYS_UPTIME, SYS_READFILE,
-};
+#include <dream/abi.h>     /* system call numbers */
 
 /* Load an ELF program and start it. NULL (with a message printed) on failure. */
 struct process *process_spawn(const char *name, const void *elf, size_t size,
                               int argc, char **argv, const char *in, size_t in_len, bool piped);
 void process_key(struct process *p, int key);
+
+/* Start /bin/<name> (or a path) in the background: it runs on its own, and is
+   tidied up after it ends (see process_reap). NULL if there's no such program. */
+struct process *program_start(const char *name, int argc, char **argv);
+void process_reap(void);
+bool user_string(struct process *p, uint64_t from, char *out, size_t n);   /* copy a string in from user space */                 /* free background programs that have ended */
+bool program_running(const char *name);  /* is a background program called this running? */
 void process_free(struct process *p);
 
 void syscall_dispatch(struct regs *r);

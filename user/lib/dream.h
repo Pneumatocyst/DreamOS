@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <dream/abi.h>     /* system call numbers, keys, the window system's structures */
 
 /* system calls */
 __attribute__((noreturn)) void exit(int code);
@@ -14,6 +15,11 @@ void sleep_ms(unsigned long ms);
 int  getpid(void);
 unsigned long uptime_ms(void);
 long readfile(const char *path, void *buf, size_t len);
+long writefile(const char *path, const void *buf, size_t len);   /* creates or replaces it */
+long listdir(const char *path, char *buf, size_t len);   /* "name\n" per entry, folders end in / */
+long fileinfo(const char *path);
+long clip_get(char *buf, size_t len);                    /* the clipboard's text: bytes copied */
+void clip_set(const char *text, size_t len);                         /* size, FILE_IS_DIR, or -1 if missing */
 
 /* the rest is plain C */
 size_t strlen(const char *s);
@@ -24,6 +30,7 @@ int  atoi(const char *s);
 void puts(const char *s);                       /* no newline added */
 void putchar(char c);
 int  printf(const char *fmt, ...);
+int  snprintf(char *buf, size_t n, const char *fmt, ...);
 int  getchar(void);                             /* -1 at end of input */
 int  readline(char *buf, int size);             /* with echo and backspace */
 unsigned rand(void);
