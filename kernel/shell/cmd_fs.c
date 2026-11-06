@@ -294,8 +294,19 @@ SH_CMD(cat) {
 }
 
 SH_CMD(wc) {
+    /* -l lines, -w words, -c bytes (any mix); none = all three */
+    bool want[3] = { false, false, false }, any = false;
+    int first = 1;
+    while (first < argc && argv[first][0] == '-' && argv[first][1]) {
+        for (const char *f = argv[first] + 1; *f; f++) {
+            int i = *f == 'l' ? 0 : *f == 'w' ? 1 : *f == 'c' ? 2 : -1;
+            if (i < 0) { kerrorf("usage: wc [-lwc] [file]\n"); return; }
+            want[i] = any = true;
+        }
+        first++;
+    }
     size_t len;
-    const char *d = sh_input(argc, argv, 1, &len);
+    const char *d = sh_input(argc, argv, first, &len);
     if (!d) return;
     uint64_t lines = 0, words = 0;
     bool in_word = false;
@@ -305,7 +316,11 @@ SH_CMD(wc) {
         if (!space && !in_word) words++;
         in_word = !space;
     }
-    kprintf(C_FG "%7lu %7lu %7lu" C_DIM "  %s\n", lines, words, (uint64_t)len, argc > 1 ? argv[1] : "");
+    if (!any) { kprintf(C_FG "%7lu %7lu %7lu" C_DIM "  %s\n", lines, words, (uint64_t)len, argc > first ? argv[first] : ""); return; }
+    uint64_t v[3] = { lines, words, len };
+    bool sp = false;
+    for (int i = 0; i < 3; i++) if (want[i]) { kprintf("%s%lu", sp ? " " : "", v[i]); sp = true; }
+    kprintf(argc > first ? " %s\n" : "\n", argc > first ? argv[first] : "");
 }
 
 SH_CMD(head) {

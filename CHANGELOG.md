@@ -2,6 +2,19 @@
 
 ## unreleased
 
+- **Shell scripts** ([docs/SCRIPTING.md](docs/SCRIPTING.md)): variables (`$x`, `${x}`, `$1`,
+  `$#`, `$@`, `$?`, `$RANDOM`...), `$((arithmetic))`, `$(command)` substitution,
+  `if`/`elif`/`else`, `while`, `until`, `for`, `break`, `continue`, comments, and
+  `test` / `[ ]`, `true`, `false`, `read`, `set`, `unset`, `shift`, `sh` / `source`,
+  `exit` inside scripts. Files starting with `#!` run like programs; `~/.dreamrc` runs at
+  startup. All of it works on one line at the prompt too.
+- Commands have a real exit status: `$?`, `&&` and the new `||` use it, and programs'
+  exit codes count.
+- Scripts in `scripts/` are installed into `/bin`: `todo`, `countdown`, `greet`.
+- `echo -n`, `wc -l/-w/-c`.
+- Pipelines own their capture buffers, so scripts can use pipes while they're themselves
+  in one, and the tokenizer no longer shares one buffer between nested lines.
+
 - **Floating point for programs**: SSE is switched on and every task's FPU/SSE registers
   are saved and restored on each task switch (`fxsave`/`fxrstor`). User programs are now
   compiled with floating point, and their `printf` understands `%f` / `%.2f`.

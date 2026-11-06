@@ -1,0 +1,32 @@
+#!/bin/sh
+# todo: a tiny to-do list, kept in ~/todo.txt
+#
+#   todo                 show the list
+#   todo add <words>     add something
+#   todo clear           start a new list
+#
+# A shell script: open it in notes to see how it works (notes /bin/todo &).
+
+list=$HOME/todo.txt
+
+if [ "$1" = add ]; then
+    shift                                  # drop "add"; the rest is the item
+    if [ -z "$*" ]; then
+        echo "usage: todo add <something to do>"
+        exit 1
+    fi
+    echo "$*" >> $list
+    echo "added. $(cat $list | wc -l) things to do."
+elif [ "$1" = clear ]; then
+    rm $list
+    echo "all clear."
+elif [ -z "$1" ]; then
+    if [ -f $list ]; then
+        cat $list
+    else
+        echo "nothing to do. add something: todo add water the plants"
+    fi
+else
+    echo "usage: todo [add <words> | clear]"
+    exit 1
+fi

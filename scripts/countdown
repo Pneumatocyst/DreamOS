@@ -1,0 +1,26 @@
+#!/bin/sh
+# countdown: count down, then say so.
+#
+#   countdown              ten seconds
+#   countdown 90 tea       ninety seconds, then "tea"
+#
+# ctrl+c stops it.
+
+seconds=10
+if [ -n "$1" ]; then
+    seconds=$1
+fi
+shift
+message="$*"
+if [ -z "$message" ]; then
+    message="time's up"
+fi
+
+while [ $seconds -gt 0 ]; do
+    echo -n "$seconds "
+    sleep 1
+    seconds=$((seconds - 1))
+done
+echo
+echo "$message!"
+notify "$message" "the countdown finished"

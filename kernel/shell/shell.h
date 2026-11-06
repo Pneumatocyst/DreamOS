@@ -21,6 +21,21 @@ int  sh_install_programs(void);   /* copy the built-in user programs into /bin *
    one, otherwise whatever was piped in. Prints an error and returns NULL if neither. */
 const char *sh_input(int argc, char **argv, int i, size_t *len);
 
+/* shell/script.c: variables, if/while/for, script files */
+void sh_exec(const char *text);                 /* run a line or a whole script */
+int  sh_run_line(char *line);                   /* one statement, no keywords: its status */
+bool sh_run_script(const char *path, int argc, char **argv);   /* false: no such file */
+bool sh_is_script(const char *data, size_t size);              /* starts with #! */
+bool sh_in_script(void);
+void sh_script_exit(int code);
+void sh_interrupt(void);                       /* ctrl+c happened: stop the script / loop too */
+void sh_setvar(const char *name, const char *value);
+void sh_fail_with(int code);                    /* this command failed (quietly) */
+int  sh_failed(void);
+void sh_clear_failure(void);
+int  sh_status(void);
+SH_CMD(true); SH_CMD(false); SH_CMD(test); SH_CMD(read); SH_CMD(set); SH_CMD(unset); SH_CMD(sh); SH_CMD(shift);
+
 /* shell/cmd_fs.c */
 SH_CMD(ls); SH_CMD(cd); SH_CMD(pwd); SH_CMD(mkdir); SH_CMD(touch); SH_CMD(cat);
 SH_CMD(rm); SH_CMD(rmdir); SH_CMD(mv); SH_CMD(cp); SH_CMD(tree);

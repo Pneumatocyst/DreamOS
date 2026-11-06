@@ -240,5 +240,14 @@ files.c (`files /path`). kernel/sys/syscalls.c has their syscalls (stat, fsop, s
 config, theme, passwd, spawn, terminal; kill is task_kill). gui/apps.c launches them
 (open_app: raise by icon or program_start). user lib: app_run loop, ui()/mix() theme colours
 (refreshed on EV_REDRAW), draw_gradient/draw_wallpaper/draw_toggle/draw_text_center.
-Next ideas from Lynwood's list: shell scripts,
-FAT32, guide app, screenshot + image viewer, todo app, log viewer, small shell tools.
+Shell scripts (after the apps move): kernel/shell/script.c parses text into statements (newline
+and ; outside quotes, # comments, "then/do/else X" split), walks them with if/while/until/for,
+expands $vars/$((..))/$(..) per statement, and hands plain statements to sh_run_line() in
+shell.c (tokenize + pipelines + && || ;). Status: sh_fail_with(code) marks a quiet failure;
+run_pipeline = no kerrorf && !sh_failed. Scripts: files starting with #! run via run_program
+-> sh_run_script (arg frames, depth <= 8). exit in a script -> sh_script_exit; ctrl+c in
+sleep/programs -> sh_interrupt. Pipelines have per-call capture buffers and tokbuf (re-entrant).
+scripts/* are baked into userbins.S and installed into /bin. Docs: docs/SCRIPTING.md.
+Next ideas from Lynwood's list:
+FAT32, guide app, screenshot + image viewer, log viewer, small shell tools (a todo
+script exists now). Scripting gaps: functions, case, < redirection, while read.

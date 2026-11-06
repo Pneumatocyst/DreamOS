@@ -1555,7 +1555,12 @@ SH_CMD(files) {
 }
 
 SH_CMD(exit) {
-    (void)argc; (void)argv;
+    if (sh_in_script()) {                 /* in a script: `exit [n]` ends the script */
+        uint64_t code = 0;
+        if (argc > 1) sh_parse_num(argv[1], &code);
+        sh_script_exit((int)code);
+        return;
+    }
     if (!active) { kprintf(C_DIM "not in the desktop. (" C_FG "shutdown" C_DIM " powers off)\n"); return; }
     wm_stop();
     kprintf(C_DIM "left the desktop. " C_FG "startx" C_DIM " to go back.\n");

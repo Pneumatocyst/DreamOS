@@ -28,6 +28,7 @@ void kwrite(const char *s, size_t n); /* same, unformatted */
 void kerrorf(const char *fmt, ...);   /* "stderr": always the screen, even inside a pipe */
 extern unsigned kerror_count;         /* bumped by kerrorf; the shell uses it for && */
 void kout_redirect(void (*hook)(const char *s, size_t n));   /* NULL = back to screen */
+void (*kout_current(void))(const char *s, size_t n);          /* where it goes now */
 
 /* kernel log, read back with dmesg */
 void klog(const char *msg);

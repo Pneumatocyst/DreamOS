@@ -36,6 +36,7 @@ USER_CFLAGS := -std=gnu11 -O2 -pipe -Wall -Wextra -ffreestanding -fno-stack-prot
                -fno-pic -fno-pie -m64 -march=x86-64 \
                -fno-builtin -Iuser/lib -Iinclude
 USER_PROGS  := $(basename $(notdir $(wildcard user/*.c)))
+SCRIPTS     := $(wildcard scripts/*)          # shell scripts that also go into /bin
 USER_ELFS   := $(USER_PROGS:%=build/user/%.elf)
 USER_LIB    := build/user/lib/crt0.o build/user/lib/dream.o build/user/lib/gui.o
 
@@ -74,13 +75,16 @@ build/user/%.elf: build/user/%.o $(USER_LIB) user/user.ld
 	@$(LD) -nostdlib -static -z max-page-size=0x1000 -z noexecstack -T user/user.ld $(USER_LIB) $< -o $@
 
 # Bake the programs into the kernel: a table of { name, start, end } plus the files.
-build/userbins.S: $(USER_ELFS)
+build/userbins.S: $(USER_ELFS) $(SCRIPTS) Makefile
 	@echo "  GEN  $@"
 	@{ echo '.section .rodata'; echo '.global userbins'; echo '.balign 8'; echo 'userbins:'; \
 	   for p in $(USER_PROGS); do echo "  .quad name_$$p, start_$$p, end_$$p"; done; \
+	   for s in $(notdir $(SCRIPTS)); do echo "  .quad sname_$$s, sstart_$$s, send_$$s"; done; \
 	   echo '  .quad 0, 0, 0'; \
 	   for p in $(USER_PROGS); do echo "name_$$p: .asciz \"$$p\""; \
 	     echo ".balign 16"; echo "start_$$p: .incbin \"build/user/$$p.elf\""; echo "end_$$p:"; done; \
+	   for s in $(notdir $(SCRIPTS)); do echo "sname_$$s: .asciz \"$$s\""; \
+	     echo "sstart_$$s: .incbin \"scripts/$$s\""; echo "send_$$s:"; done; \
 	   echo '.section .note.GNU-stack,"",@progbits'; } > $@
 
 build/userbins.S.o: build/userbins.S

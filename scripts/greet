@@ -1,0 +1,22 @@
+#!/bin/sh
+# greet: says hello, and remembers you. A first script to read and change.
+#
+# Things it shows: variables, $(command), if, read, and writing a file with >.
+
+file=$HOME/.name
+
+if [ -f $file ]; then
+    name=$(cat $file)
+    echo "welcome back, $name."
+else
+    echo -n "hello! what's your name? "
+    read name
+    if [ -z "$name" ]; then
+        name=stranger
+    fi
+    echo $name > $file
+    echo "nice to meet you, $name. (forget me with: rm ~/.name)"
+fi
+
+count=$(ls /bin | wc -w)
+echo "there are $count programs and scripts in /bin. type help for the rest."

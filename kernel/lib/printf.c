@@ -88,6 +88,7 @@ static void (*out_hook)(const char *, size_t);
 unsigned kerror_count;
 
 void kout_redirect(void (*hook)(const char *, size_t)) { out_hook = hook; }
+void (*kout_current(void))(const char *, size_t) { return out_hook; }
 
 static void to_screen(const char *s, size_t n) {
     static bool esc;

@@ -152,7 +152,7 @@ SH_CMD(sleep) {
     if (argc < 2 || !sh_parse_num(argv[1], &secs)) { kerrorf("usage: sleep <seconds>\n"); return; }
     uint64_t end = pit_ticks() + secs * pit_hz();
     while (pit_ticks() < end) {
-        if (sh_poll_key() == 3) { kerrorf(C_DIM "^C\n"); return; }   /* ctrl+c (keeps the desktop alive too) */
+        if (sh_poll_key() == 3) { kerrorf(C_DIM "^C\n"); sh_interrupt(); return; }   /* ctrl+c (keeps the desktop alive too) */
         task_sleep(10);   /* doze: the desktop and others keep running */
     }
 }

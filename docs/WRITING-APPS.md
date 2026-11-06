@@ -1,6 +1,7 @@
 # Adding things to dream
 
-Four ways to extend dream, from smallest to biggest.
+Four ways to extend dream, from smallest to biggest. (Or, smaller still, a shell script:
+see [SCRIPTING.md](SCRIPTING.md). Files in `scripts/` are installed into `/bin` too.)
 
 ## 1. A shell command (kernel side)
 

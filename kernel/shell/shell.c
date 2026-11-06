@@ -5,8 +5,12 @@
      cmd1 | cmd2      pipe: cmd1's output becomes cmd2's input
      cmd > file       write output to a file    (>> appends)
      cmd1 ; cmd2      run one after the other
-     cmd1 && cmd2     run cmd2 only if cmd1 didn't print an error
-     "quoted words"   keep spaces inside one argument */
+     cmd1 && cmd2     run cmd2 only if cmd1 worked   (cmd1 || cmd2: only if it failed)
+     "quoted words"   keep spaces inside one argument
+     prog &           run a program in the background
+
+   Variables, $((sums)), if / while / for and script files are in script.c, which
+   calls sh_run_line() here for each plain statement. */
 #include "shell/shell.h"
 #include "arch/cpu.h"
 #include "arch/io.h"
@@ -151,8 +155,9 @@ static void cmd_paste(int, char **);
 static void cmd_clear(int argc, char **argv) { (void)argc; (void)argv; con_clear(); }
 
 static void cmd_echo(int argc, char **argv) {
-    for (int i = 1; i < argc; i++) kprintf("%s%s", argv[i], i + 1 < argc ? " " : "");
-    kprintf("\n");
+    bool newline = !(argc > 1 && !strcmp(argv[1], "-n"));     /* echo -n: stay on the line */
+    for (int i = newline ? 1 : 2; i < argc; i++) kprintf("%s%s", argv[i], i + 1 < argc ? " " : "");
+    if (newline) kprintf("\n");
 }
 
 static void cmd_uptime(int argc, char **argv) {
@@ -259,7 +264,17 @@ static const struct { const char *name, *help; void (*fn)(int, char **); } comma
     { "rm",       "remove files (-r for directories)",    cmd_rm       },
     { "rmdir",    "remove an empty directory",            cmd_rmdir    },
     /* text */
-    { "echo",     "print its arguments",                  cmd_echo     },
+    { "echo",     "print its arguments (-n: no newline)", cmd_echo     },
+    { "test",     "check something, for if/while (also [ ])", cmd_test },
+    { "[",        "same as test",                         cmd_test     },
+    { "true",     "do nothing, successfully",             cmd_true     },
+    { "false",    "do nothing, unsuccessfully",           cmd_false    },
+    { "read",     "read a line from the keyboard into variables", cmd_read },
+    { "set",      "list the shell's variables",           cmd_set      },
+    { "unset",    "forget a variable",                    cmd_unset    },
+    { "sh",       "run a shell script",                   cmd_sh       },
+    { "shift",    "in a script: drop $1, the rest move up", cmd_shift  },
+    { "source",   "same as sh",                           cmd_sh       },
     { "copy",     "put words or piped text on the clipboard", cmd_copy },
     { "paste",    "print the clipboard",                  cmd_paste    },
     { "grep",     "lines containing a pattern",           cmd_grep     },
@@ -328,10 +343,11 @@ static void cmd_help(int argc, char **argv) {
 
 /* ---- parsing a line ------------------------------------------------------------ */
 
-static char tokbuf[LINE_MAX * 2];
 
-/* Break a line into words and operators ( | > >> ; && ). Quotes group words. */
-static int tokenize(const char *s, char **tok, bool *op) {
+/* Break a line into words and operators ( | > >> ; && || ). Quotes group words. */
+/* The words are copied into tokbuf (the caller's: a script running in the middle of a
+   line tokenizes its own lines, and mustn't overwrite the rest of ours). */
+static int tokenize(const char *s, char **tok, bool *op, char *tokbuf) {
     char *out = tokbuf;
     int n = 0;
     while (*s && n < TOK_MAX) {
@@ -341,7 +357,7 @@ static int tokenize(const char *s, char **tok, bool *op) {
         if (*s == '|' || *s == '>' || *s == ';' || (s[0] == '&' && s[1] == '&')) {
             op[n] = true;
             *out++ = *s;
-            if ((s[0] == '>' && s[1] == '>') || s[0] == '&') *out++ = *++s;
+            if ((s[0] == '>' && s[1] == '>') || s[0] == '&' || (s[0] == '|' && s[1] == '|')) *out++ = *++s;
             s++;
         } else {
             op[n] = false;
@@ -362,27 +378,28 @@ static int tokenize(const char *s, char **tok, bool *op) {
 
 /* ---- running commands ---------------------------------------------------------- */
 
-/* Pipes and > need somewhere to collect a command's output instead of the screen. */
-static char *capbuf[2];
-static size_t caplen[2], capcap[2];
-static int cap;
-static bool cap_esc;
+/* Pipes and > need somewhere to collect a command's output instead of the screen.
+   Each pipeline has its own buffers, so a script running inside a pipe can use
+   pipes itself without mixing them up. */
+struct capbuf { char *buf; size_t len, cap; bool esc; };
+static struct capbuf *cur_cap;                    /* where capture() is writing right now */
 
 static void capture(const char *s, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        char c = s[i];
-        if (cap_esc) { cap_esc = false; continue; }   /* colours don't belong in files */
-        if (c == '\033') { cap_esc = true; continue; }
-        if (c == BLOCK[0]) c = '#';
-        if (caplen[cap] == capcap[cap]) {             /* full: grow it (up to 1 MiB) */
-            size_t want = capcap[cap] ? capcap[cap] * 2 : 4096;
+    struct capbuf *c = cur_cap;
+    for (size_t i = 0; i < n && c; i++) {
+        char ch = s[i];
+        if (c->esc) { c->esc = false; continue; }    /* colours don't belong in files */
+        if (ch == '\033') { c->esc = true; continue; }
+        if (ch == BLOCK[0]) ch = '#';
+        if (c->len == c->cap) {                       /* full: grow it (up to 1 MiB) */
+            size_t want = c->cap ? c->cap * 2 : 4096;
             if (want > FS_FILE_MAX) return;
-            char *p = krealloc(capbuf[cap], want);
+            char *p = krealloc(c->buf, want);
             if (!p) return;
-            capbuf[cap] = p;
-            capcap[cap] = want;
+            c->buf = p;
+            c->cap = want;
         }
-        capbuf[cap][caplen[cap]++] = c;
+        c->buf[c->len++] = ch;
     }
 }
 
@@ -407,6 +424,12 @@ static bool run_program(int argc, char **argv) {
     if (n < 0 || fs_get(n)->dir) return false;
 
     const char *name = strrchr(path, '/') + 1;
+    if (sh_is_script(fs_data(n), fs_get(n)->size)) {   /* #! at the top: a shell script */
+        char full[256];
+        fs_path(n, full, sizeof full);
+        sh_run_script(full, argc, argv);
+        return true;
+    }
     struct process *p = process_spawn(name, fs_data(n), fs_get(n)->size, argc, argv,
                                       stdin_buf, stdin_len, stdin_buf != NULL);
     if (!p) return true;
@@ -419,8 +442,8 @@ static bool run_program(int argc, char **argv) {
     if (p->fault[0])
         kerrorf(C_ERR "segmentation fault" C_DIM ": %s: %s\n" C_DIM
                 "the program was stopped. dream is fine.\n", p->name, p->fault);
-    else if (p->killed) kerrorf(C_DIM "^C\n");
-    else if (p->exit_code) kerrorf(C_DIM "[%s exited with %d]\n", p->name, p->exit_code);
+    else if (p->killed) { kerrorf(C_DIM "^C\n"); sh_interrupt(); }
+    else if (p->exit_code) sh_fail_with(p->exit_code);      /* $? and && see it; no fuss */
     process_free(p);
     return true;
 }
@@ -436,6 +459,7 @@ static void run_one(int argc, char **argv) {
 /* Run one pipeline: cmd | cmd | cmd [> file]. Returns false if anything failed. */
 static bool run_pipeline(char **tok, bool *op, int n) {
     unsigned errors_before = kerror_count;
+    sh_clear_failure();
     const char *redir = NULL;
     bool append = false;
 
@@ -449,6 +473,14 @@ static bool run_pipeline(char **tok, bool *op, int n) {
         i--;
     }
 
+    /* remember where output and input were going, to put them back afterwards */
+    void (*outer_hook)(const char *, size_t) = kout_current();
+    struct capbuf *outer_cap = cur_cap, bufs[2] = { { 0 }, { 0 } };
+    const char *outer_in = stdin_buf;
+    size_t outer_in_len = stdin_len;
+    bool outer_tty = tty;
+    struct capbuf *last_buf = NULL;
+
     int start = 0, seg = 0;
     for (;;) {
         int end = start;
@@ -457,49 +489,67 @@ static bool run_pipeline(char **tok, bool *op, int n) {
         if (end == start) { kerrorf(C_ERR "syntax" C_DIM ": empty command around |\n"); break; }
 
         if (!last || redir) {        /* send this command's output into a buffer */
-            cap = seg % 2;
-            caplen[cap] = 0;
-            cap_esc = false;
+            last_buf = &bufs[seg % 2];
+            last_buf->len = 0;
+            last_buf->esc = false;
+            cur_cap = last_buf;
             kout_redirect(capture);
             tty = false;
         }
         run_one(end - start, &tok[start]);
-        kout_redirect(NULL);
-        tty = true;
+        kout_redirect(outer_hook);
+        cur_cap = outer_cap;
+        tty = outer_tty;
 
         if (last) break;
-        stdin_buf = capbuf[cap];     /* ...which the next command reads as its input */
-        stdin_len = caplen[cap];
+        stdin_buf = last_buf->buf ? last_buf->buf : "";   /* ...which the next command reads */
+        stdin_len = last_buf->len;
         start = end + 1;
         seg++;
     }
-    stdin_buf = NULL;
+    stdin_buf = outer_in;
+    stdin_len = outer_in_len;
 
     if (redir && kerror_count == errors_before) {
         int f = fs_lookup(cwd, redir);
         if (f == FS_ENOENT) f = fs_create(cwd, redir, false);
         if (f >= 0 && fs_get(f)->dir) f = FS_EISDIR;
-        if (f >= 0) f = fs_write(f, capbuf[cap], caplen[cap], append);
+        if (f >= 0) f = fs_write(f, last_buf && last_buf->buf ? last_buf->buf : "", last_buf ? last_buf->len : 0, append);
         if (f < 0) sh_perror("shell", redir, f);
     }
-    return kerror_count == errors_before;
+    kfree(bufs[0].buf);
+    kfree(bufs[1].buf);
+    /* it worked if nothing complained (kerrorf) and nothing failed quietly (sh_fail_with) */
+    return kerror_count == errors_before && !sh_failed();
 }
 
-/* Split the line at ; and && and run each pipeline in turn. */
-static void run_line(char *line) {
-    char *tok[TOK_MAX];
+/* Split the line at ; and && and run each pipeline in turn. Returns the status of
+   the last one that ran: 0 = it worked. (Scripts and the prompt call this for each
+   statement, after script.c has filled in the $variables.) */
+int sh_run_line(char *line) {
+    char *tok[TOK_MAX], tokbuf[LINE_MAX * 2];
     bool op[TOK_MAX];
-    int n = tokenize(line, tok, op);
-    int start = 0;
-    bool ok = true, skip = false;
-    while (start < n) {
+    int n = tokenize(line, tok, op, tokbuf);
+    int start = 0, code = 0;
+    bool skip = false;
+    for (;;) {
+        /* the next pipeline runs until ;  &&  or  || */
         int end = start;
-        while (end < n && !(op[end] && (tok[end][0] == ';' || tok[end][0] == '&'))) end++;
-        if (end > start && !skip) ok = run_pipeline(&tok[start], &op[start], end - start);
+        while (end < n && !(op[end] && (tok[end][0] == ';' || tok[end][0] == '&' ||
+                                        (tok[end][0] == '|' && tok[end][1] == '|')))) end++;
+        if (end > start && !skip) {
+            bool ok = run_pipeline(&tok[start], &op[start], end - start);
+            code = ok ? 0 : (sh_failed() ? sh_failed() : 1);
+        }
         if (end >= n) break;
-        skip = tok[end][0] == '&' && (!ok || skip);
+        /* a && b: b only if a worked.   a || b: b only if a failed.   a ; b: b anyway.
+           A skipped command leaves the status as it was, so false && x || y runs y. */
+        if (tok[end][0] == '&') skip = code != 0;
+        else if (tok[end][0] == '|') skip = code == 0;
+        else skip = false;
         start = end + 1;
     }
+    return code;
 }
 
 static void prompt(void) {
@@ -599,6 +649,10 @@ void shell_run(void) {
     char line[LINE_MAX];
     cwd = fs_home();
     config_apply();
+    if (fs_lookup(0, "/root/.dreamrc") >= 0) {         /* your own startup script, if you wrote one */
+        char *rc[1] = { ".dreamrc" };
+        sh_run_script("/root/.dreamrc", 1, rc);
+    }
     if (strcmp(config_get("autostart", "yes"), "no") && fb.width >= 800) {
         kprintf(C_DIM "starting the desktop... (" C_FG "settings" C_DIM " can turn this off)\n");
         wm_start();
@@ -616,7 +670,7 @@ void shell_run(void) {
         if (hist_len == HIST) { memmove(history[0], history[1], sizeof history[0] * (HIST - 1)); hist_len--; }
         memcpy(history[hist_len++], line, LINE_MAX);
 
-        run_line(line);
+        sh_exec(line);
         if (!wm_active()) process_reap();                 /* tidy up ended background programs */
         if (!fs_get(cwd)->used || !fs_get(cwd)->dir) cwd = 0;   /* our directory vanished */
 

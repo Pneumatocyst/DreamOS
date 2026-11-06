@@ -151,7 +151,7 @@ void kmain(void) {
     ok("ramfs ready");
     ata_init();
     mount_root();
-    snprintf(m, sizeof m, "%d user programs in /bin (they run in ring 3)", sh_install_programs());
+    snprintf(m, sizeof m, "%d programs and scripts in /bin", sh_install_programs());
     ok(m);
     kprintf("\n" C_ACCENT "  welcome to dream." C_DIM "  type " C_FG "help" C_DIM " to look around, or "
             C_FG "startx" C_DIM " for the desktop.\n\n");

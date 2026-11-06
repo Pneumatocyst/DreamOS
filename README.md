@@ -75,8 +75,10 @@ the kernel because it *is* the shell's screen.)
   dream carries on
 - **Storage**: ATA (IDE) disk driver; *dreamfs* saves the whole file tree to disk after
   every change and restores it at boot
-- **Shell** with pipes `|`, redirects `>` `>>`, `;`, `&&`, quotes and history. About
-  50 commands: `ls cd cat grep head tail wc tree cp mv rm ps kill free date uname fetch`...
+- **Shell** with pipes `|`, redirects `>` `>>`, `;`, `&&`, `||`, quotes and history, and
+  **scripts**: variables, `$((sums))`, `$(commands)`, `if`/`while`/`until`/`for`, `test`,
+  `read`, script files with `#!` and a `~/.dreamrc` ([guide](docs/SCRIPTING.md)). About
+  60 commands: `ls cd cat grep head tail wc tree cp mv rm ps kill free date uname fetch`...
   and desktop ones like `open`, `notify`, `lock`, `theme`, `wallpaper`
 - **Drivers**: framebuffer (double buffered), PS/2 keyboard and mouse (with wheel), the VMware/QEMU
   absolute "vmmouse" (no pointer capture in VMs),
@@ -99,6 +101,7 @@ the kernel because it *is* the shell's screen.)
 - [docs/DESKTOP.md](docs/DESKTOP.md): using the desktop and the apps
 - [docs/BUILDING.md](docs/BUILDING.md): building, running, debugging, automated screenshots
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it all fits together, from power-on to pixels
+- [docs/SCRIPTING.md](docs/SCRIPTING.md): shell scripts, from a first one to loops and tests
 - [docs/WRITING-APPS.md](docs/WRITING-APPS.md): add a shell command, a ring-3 program, or a desktop app
 - [CHANGELOG.md](CHANGELOG.md): what changed in each version
 
@@ -113,7 +116,7 @@ kernel/proc/process.c    ELF loader, system calls, background programs, stopping
 include/dream/abi.h      what the kernel and programs agree on: system calls, events, drawing commands
 kernel/drivers/          fb, console, theme, keyboard, mouse, ata (disk), rtc, serial
 kernel/fs/               ramfs (the file tree in memory), diskfs (saving it to disk)
-kernel/shell/            the shell and its commands
+kernel/shell/            the shell and its commands; script.c: variables, if/while/for, scripts
 kernel/gfx/gfx.c         drawing: surfaces, shapes, smooth lines, bitmap text, damage
 kernel/gfx/ui.c          the modern bits: smooth text, see-through shapes, shadows, blur
 kernel/gui/wm.c          window manager + compositor + top bar + dock + launcher + lock screen
@@ -124,6 +127,7 @@ kernel/sys/              config (/etc/dream.conf, passwords), clipboard, CPU usa
 user/                    ring-3 programs (each .c becomes a program in /bin): the apps (files, notes,
                          calculator, paint, monitor, settings, clock, snake) and small ones (mandel, hi...)
 user/lib/                their tiny libc (dream.h) and window library (gui.h)
+scripts/                 shell scripts that are installed into /bin (todo, countdown, greet)
 tools/mkfont.py          turns the Inter font into bitmaps the kernel can draw
 tools/qemu_drive.py      drives QEMU headlessly: type, click, take screenshots
 ```
