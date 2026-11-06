@@ -35,6 +35,8 @@ static inline void irq_restore(uint64_t flags) {
     if (flags & 0x200) asm volatile("sti" ::: "memory");   /* only if they were on before */
 }
 
+static inline uint64_t read_cr0(void) { uint64_t v; asm volatile("mov %%cr0, %0" : "=r"(v)); return v; }
+static inline void write_cr0(uint64_t v) { asm volatile("mov %0, %%cr0" :: "r"(v) : "memory"); }
 static inline uint64_t read_cr3(void) { uint64_t v; asm volatile("mov %%cr3, %0" : "=r"(v)); return v; }
 static inline void write_cr3(uint64_t v) { asm volatile("mov %0, %%cr3" :: "r"(v) : "memory"); }
 static inline uint64_t read_cr4(void) { uint64_t v; asm volatile("mov %%cr4, %0" : "=r"(v)); return v; }

@@ -56,6 +56,12 @@ ready one, round-robin. Sleeping tasks wake when their time comes. The **idle** 
 `hlt` when nobody else wants the CPU, which is also how CPU usage is measured: the share
 of ticks that went to idle is the share of time the machine was idle (`sys/stats.c`).
 
+Each task also has a 512-byte area for its **FPU/SSE registers**. The scheduler saves the
+outgoing task's with `fxsave` and loads the incoming one's with `fxrstor`, so user programs
+can use floating point without trampling each other. (The kernel itself is still compiled
+without floating point, so interrupt handlers never touch those registers.) `fputest`
+checks it: a background task parks a value in `xmm0` while `mandel` does float maths.
+
 Tasks share data through `struct mutex` (wait by yielding) or, for tiny critical sections,
 by turning interrupts off (`irq_save`/`irq_restore`). dream runs on one CPU, so that's enough.
 
@@ -99,8 +105,8 @@ Everything draws into **surfaces**: blocks of `0xRRGGBB` pixels with a clip rect
 - `ui.c`: see-through rounded rectangles, 1-pixel rounded outlines, soft shadows, blur,
   and **smooth text**.
 
-There's no floating point in the kernel (it doesn't save FPU registers when switching
-tasks), so all of this is integer maths in fixed point: 256 means "one whole pixel" or
+The kernel is compiled without floating point (user programs get it, the kernel
+doesn't), so all of this is integer maths in fixed point: 256 means "one whole pixel" or
 "fully covered". Edges are smooth because a pixel that's 40% inside a shape gets 40%
 of its colour.
 

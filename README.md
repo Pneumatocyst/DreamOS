@@ -65,7 +65,8 @@ monitor (CPU/memory graphs and tasks), settings, clock, snake.
 - **Memory**: bitmap page allocator, `kmalloc`/`kfree`, 4-level page tables
 - **Multitasking**: preemptive round-robin scheduler, 10 ms time slices, sleeping, mutexes
 - **User mode**: ring-3 programs in their own address spaces, ELF loader, `int 0x80`
-  system calls with checked pointers. A crashing program gets a "segmentation fault";
+  system calls with checked pointers, floating point (each task's FPU/SSE registers are
+  saved on every switch; try `mandel`). A crashing program gets a "segmentation fault";
   dream carries on
 - **Storage**: ATA (IDE) disk driver; *dreamfs* saves the whole file tree to disk after
   every change and restores it at boot
@@ -123,7 +124,6 @@ Suggested reading order: `main.c` → `arch/idt.c` + `arch/isr.S` → `drivers/c
 
 ## Roadmap ideas
 
-- Save FPU/SSE state on task switches, so programs can use floating point
 - `syscall`/`sysret`, and more system calls (open/write files, spawn programs)
 - Several terminals; running programs in the background with `&`
 - Read a real filesystem (FAT or ext2), and CDs (ATAPI)

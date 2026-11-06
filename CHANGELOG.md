@@ -1,5 +1,15 @@
 # Changelog
 
+## unreleased
+
+- **Floating point for programs**: SSE is switched on and every task's FPU/SSE registers
+  are saved and restored on each task switch (`fxsave`/`fxrstor`). User programs are now
+  compiled with floating point, and their `printf` understands `%f` / `%.2f`.
+- New program `mandel` (the Mandelbrot set in colour, with doubles) and a `fputest`
+  command that proves tasks keep their own FPU registers.
+- The mouse uses QEMU's absolute "vmmouse" when available, so it works without capture.
+- `dreamos` command (`make install`).
+
 ## 0.2: the desktop grows up (2026-11-06)
 
 **Look and feel**

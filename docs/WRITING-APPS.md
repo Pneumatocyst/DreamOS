@@ -56,7 +56,7 @@ added), `putchar`, `getchar`, `readline`, `read`, `write`, `sleep_ms`, `uptime_m
 
 Things to know:
 
-- no floating point (the kernel doesn't save FPU registers between tasks yet)
+- floating point works (`double`, and `printf("%.2f")`); see `user/mandel.c`
 - a built-in command with the same name wins over a program in `/bin`
 - if it crashes, dream prints "segmentation fault" and carries on; try `crashme`
 - **ctrl+c** stops it, and so does **end task** in the monitor

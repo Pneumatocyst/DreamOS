@@ -24,6 +24,9 @@ struct task {
     uint64_t cr3;                /* page tables (physical address); 0 = the kernel's */
     struct process *proc;        /* the user program this task runs, if any */
     struct task *next;           /* all tasks form a ring */
+    /* The FPU/SSE registers (x87, xmm0-15, mxcsr), saved here by `fxsave` while the
+       task isn't running. fxsave needs a 16-byte aligned address: see task_fpu(). */
+    uint8_t fpu_space[512 + 16];
 };
 
 struct process;

@@ -61,6 +61,8 @@ int printf(const char *fmt, ...) {
         int width = 0;
         if (*fmt == '0') { pad = '0'; fmt++; }
         while (*fmt >= '0' && *fmt <= '9') width = width * 10 + (*fmt++ - '0');
+        int prec = 6;
+        if (*fmt == '.') { prec = 0; fmt++; while (*fmt >= '0' && *fmt <= '9') prec = prec * 10 + (*fmt++ - '0'); }
         if (*fmt == 'l') fmt++;
         switch (*fmt) {
         case 'd': { long v = va_arg(ap, long); if (v < 0) { putchar('-'); v = -v; width--; } put_num(v, 10, width, pad); break; }
@@ -69,6 +71,19 @@ int printf(const char *fmt, ...) {
         case 'p': putchar('0'); putchar('x'); put_num(va_arg(ap, unsigned long), 16, 16, '0'); break;
         case 's': { const char *s = va_arg(ap, const char *); int n = strlen(s); while (*s) putchar(*s++); while (width-- > n) putchar(' '); break; }
         case 'c': putchar((char)va_arg(ap, int)); break;
+        case 'f': {                      /* a double: whole part, dot, then prec digits */
+            double v = va_arg(ap, double);
+            if (v < 0) { putchar('-'); v = -v; }
+            double round = 0.5;
+            for (int i = 0; i < prec; i++) round /= 10;
+            v += round;
+            unsigned long whole = (unsigned long)v;
+            put_num(whole, 10, 0, ' ');
+            if (prec) putchar('.');
+            v -= (double)whole;
+            for (int i = 0; i < prec; i++) { v *= 10; int d = (int)v; putchar('0' + d); v -= d; }
+            break;
+        }
         case '%': putchar('%'); break;
         }
     }

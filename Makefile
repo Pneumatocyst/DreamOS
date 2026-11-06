@@ -31,8 +31,9 @@ SRCS    := $(shell find kernel -name '*.c' -o -name '*.S')
 OBJS    := $(SRCS:%=build/%.o) build/userbins.S.o
 
 # User programs: compiled separately, for ring 3, against user/lib (no kernel code).
+# Unlike the kernel, they may use floating point: the scheduler saves FPU state.
 USER_CFLAGS := -std=gnu11 -O2 -pipe -Wall -Wextra -ffreestanding -fno-stack-protector \
-               -fno-pic -fno-pie -m64 -march=x86-64 -mno-sse -mno-sse2 -mno-mmx -mno-80387 \
+               -fno-pic -fno-pie -m64 -march=x86-64 \
                -fno-builtin -Iuser/lib
 USER_PROGS  := $(basename $(notdir $(wildcard user/*.c)))
 USER_ELFS   := $(USER_PROGS:%=build/user/%.elf)

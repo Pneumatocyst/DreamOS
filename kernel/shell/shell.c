@@ -137,6 +137,7 @@ const char *sh_input(int argc, char **argv, int i, size_t *len) {
 static void cmd_help(int, char **);
 static void cmd_passwd(int, char **);
 static void cmd_kill(int, char **);
+static void cmd_fputest(int, char **);
 
 static void cmd_clear(int argc, char **argv) { (void)argc; (void)argv; con_clear(); }
 
@@ -294,6 +295,7 @@ static const struct { const char *name, *help; void (*fn)(int, char **); } comma
     { "clear",    "clear the screen (or ctrl+l)",         cmd_clear    },
     { "hello",    "say hi",                               cmd_hello    },
     { "crash",    "trigger a CPU exception on purpose",   cmd_crash    },
+    { "fputest",  "check tasks keep their own FPU state", cmd_fputest  },
     { "reboot",   "restart the machine",                  cmd_reboot   },
     { "shutdown", "power off (QEMU)",                     cmd_shutdown },
 };
@@ -513,6 +515,28 @@ static void cmd_passwd(int argc, char **argv) {
     passwd_change(pw[0]);
     kprintf(pw[0][0] ? C_OK "password set." C_DIM " the lock screen will ask for it.\n"
                      : C_DIM "password removed.\n");
+}
+
+/* fputest: proof that each task keeps its own FPU registers. A background task
+   parks a value in xmm0, then keeps checking it's still there while other tasks
+   (run `mandel` meanwhile!) do floating-point maths in the same registers. */
+static void fpu_watch(void *arg) {
+    (void)arg;
+    uint64_t want = 0x0123456789abcdefull, got;
+    asm volatile("movq %0, %%xmm0" :: "r"(want));
+    for (int i = 0; i < 1000; i++) {           /* about 10 seconds */
+        task_sleep(10);
+        asm volatile("movq %%xmm0, %0" : "=r"(got));
+        if (got != want) { klog("fputest: xmm0 was overwritten!"); kprintf(C_ERR "fputest: FAILED\n"); return; }
+    }
+    klog("fputest: xmm0 survived 1000 task switches");
+    kprintf(C_OK "fputest: passed" C_DIM ", xmm0 survived 1000 trips through the scheduler\n");
+}
+
+static void cmd_fputest(int argc, char **argv) {
+    (void)argc; (void)argv;
+    if (!task_spawn("fputest", fpu_watch, NULL)) { kerrorf(C_ERR "fputest" C_DIM ": couldn't start a task\n"); return; }
+    kprintf(C_DIM "watching xmm0 for 10 seconds. run " C_FG "mandel" C_DIM " meanwhile to stir the FPU.\n");
 }
 
 static void cmd_kill(int argc, char **argv) {

@@ -2,7 +2,7 @@
 
 > Context for an AI assistant (or a person) picking up this project. First written 2026-11-05
 > at the end of the first build session; updated 2026-11-06 after the 0.2 session (see
-> section 9). The code lives on GitHub at `Pneumatocyst/dream`.
+> section 9). The code lives on GitHub at `Pneumatocyst/DreamOS`.
 
 ## 1. What this is
 
@@ -18,7 +18,7 @@ explained it. All of it boots and was verified in QEMU, usually with screenshots
 - Bootloader: **Limine** (protocol base revision 3), BIOS and UEFI ISO.
 - Emulator: **QEMU**, machine type `-M pc` (i440fx, so the legacy IDE controller exists).
 - Size: about 10,000 lines of C/assembly (plus a 4,700-line generated font table).
-  Git repo on GitHub (`Pneumatocyst/dream`, branch `main`).
+  Git repo on GitHub (`Pneumatocyst/DreamOS`, branch `main`).
 
 ## 2. How Lynwood works (important)
 
@@ -207,3 +207,10 @@ Hyprland): relative PS/2 needs pointer capture, which is unreliable on Wayland. 
 positions; QEMU raises a dummy PS/2 packet as the interrupt, and the driver drains the
 vmmouse queue instead. Falls back to PS/2 elsewhere. F1 also opens the launcher because
 Hyprland may keep the super key. The `dreamos` command (`make install`) launches the VM.
+
+FPU (after 0.2): `sched/task.c` turns on SSE (CR0/CR4) in `fpu_init`, every `struct task` has
+`fpu_space` (512 B fxsave area, 16-aligned via `task_fpu()`), and `schedule()` does
+fxsave(prev)/fxrstor(next). User programs are built WITH floating point now; the kernel is
+still `-mno-sse`. `fputest` + `mandel` test it (verified it FAILS with the save removed).
+Next planned steps: file + window syscalls, move notes into /bin as the first user-space
+app, then a clipboard. Repo: github.com/Pneumatocyst/DreamOS.

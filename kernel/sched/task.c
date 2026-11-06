@@ -16,6 +16,32 @@ static uint64_t kcr3;
 
 uint64_t kernel_cr3(void) { return kcr3; }
 
+/* ---- the FPU ------------------------------------------------------------------
+ * Floating point and SSE have their own registers (xmm0-15 and friends). The
+ * context switch in switch.S only saves the ordinary ones, so if two tasks used
+ * floating point, they'd scribble over each other's numbers. So on every switch we
+ * also save the outgoing task's FPU registers (fxsave, 512 bytes) and load the
+ * incoming one's (fxrstor). The kernel itself is still built without floating
+ * point; this is for user programs. */
+
+static uint8_t fpu_clean[512] __attribute__((aligned(16)));   /* a freshly reset FPU */
+
+static uint8_t *task_fpu(struct task *t) {
+    return (uint8_t *)(((uint64_t)t->fpu_space + 15) & ~15ull);
+}
+
+static void fpu_init(void) {
+    uint64_t cr0 = read_cr0();
+    cr0 &= ~(1ull << 2);          /* EM off: there IS an FPU, don't trap its instructions */
+    cr0 |= 1ull << 1;             /* MP on: wait properly for the FPU */
+    cr0 &= ~(1ull << 3);          /* TS off: no "task switched" trap, we save eagerly */
+    write_cr0(cr0);
+    write_cr4(read_cr4() | (1ull << 9) | (1ull << 10));   /* OSFXSR, OSXMMEXCPT: SSE on */
+    uint32_t mxcsr = 0x1f80;      /* all SSE exceptions masked, round to nearest */
+    asm volatile("fninit; ldmxcsr %0" :: "m"(mxcsr));
+    asm volatile("fxsave %0" : "=m"(fpu_clean));
+}
+
 struct task *task_current(void) { return current; }
 uint64_t sched_total_ticks(void) { return total_ticks; }
 
@@ -59,6 +85,8 @@ static void schedule(void) {
     if (prev->state == TASK_RUNNING) prev->state = TASK_READY;
     next->state = TASK_RUNNING;
     current = next;
+    asm volatile("fxsave (%0)" :: "r"(task_fpu(prev)) : "memory");
+    asm volatile("fxrstor (%0)" :: "r"(task_fpu(next)) : "memory");
     /* if it's a user program, interrupts from ring 3 must land on its own kernel stack */
     if (next->stack) tss_set_rsp0((uint64_t)next->stack + STACK_SIZE);
     /* ...and it sees its own address space */
@@ -95,6 +123,8 @@ void sched_init(const char *name) {
     strlcpy(boot_task.name, name, sizeof boot_task.name);
     current = &boot_task;
     ntasks = 1;
+    fpu_init();
+    memcpy(task_fpu(&boot_task), fpu_clean, 512);
     kcr3 = read_cr3();                   /* the page tables Limine built: the kernel's */
     idle = task_spawn("idle", idle_loop, NULL);
 }
@@ -108,6 +138,7 @@ struct task *task_spawn(const char *name, void (*fn)(void *), void *arg) {
     t->fn = fn;
     t->arg = arg;
     t->state = TASK_READY;
+    memcpy(task_fpu(t), fpu_clean, 512);   /* every task starts with a clean FPU */
 
     /* Build a stack that looks like switch_to was called from task_start:
        the registers it will pop, then the address its `ret` will jump to. */
