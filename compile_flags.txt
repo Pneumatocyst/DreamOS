@@ -1,0 +1,10 @@
+-std=gnu11
+-ffreestanding
+-Iinclude
+-Ikernel
+-m64
+-mcmodel=kernel
+-mno-red-zone
+-mno-sse
+-Wall
+-Wextra
