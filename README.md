@@ -37,7 +37,11 @@ The mouse just works: dream speaks QEMU's "vmmouse" protocol, so your pointer sl
 and out of the VM window without being captured. (On other emulators it falls back to a
 plain PS/2 mouse: click the window to capture it, **Ctrl+Alt+G** to let go.)
 
-## What's in it (v0.2)
+Or skip building: every push to `main` publishes a ready-made ISO as the
+[latest release](https://github.com/Pneumatocyst/DreamOS/releases/tag/latest), and
+[docs/PROXMOX.md](docs/PROXMOX.md) turns it into a Proxmox VM with one script.
+
+## What's in it (v0.3)
 
 **The desktop** ([guide](docs/DESKTOP.md))
 
@@ -99,6 +103,7 @@ the kernel because it *is* the shell's screen.)
 ## Documentation
 
 - [docs/DESKTOP.md](docs/DESKTOP.md): using the desktop and the apps
+- [docs/PROXMOX.md](docs/PROXMOX.md): a DreamOS VM on Proxmox VE, kept up to date with each build
 - [docs/BUILDING.md](docs/BUILDING.md): building, running, debugging, automated screenshots
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it all fits together, from power-on to pixels
 - [docs/SCRIPTING.md](docs/SCRIPTING.md): shell scripts, from a first one to loops and tests
@@ -129,6 +134,7 @@ user/                    ring-3 programs (each .c becomes a program in /bin): th
 user/lib/                their tiny libc (dream.h) and window library (gui.h)
 scripts/                 shell scripts that are installed into /bin (todo, countdown, greet)
 tools/mkfont.py          turns the Inter font into bitmaps the kernel can draw
+tools/proxmox/           dreamos-vm.sh: creates (and updates) a DreamOS VM on Proxmox
 tools/qemu_drive.py      drives QEMU headlessly: type, click, take screenshots
 ```
 

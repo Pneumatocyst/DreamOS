@@ -251,3 +251,12 @@ scripts/* are baked into userbins.S and installed into /bin. Docs: docs/SCRIPTIN
 Next ideas from Lynwood's list:
 FAT32, guide app, screenshot + image viewer, log viewer, small shell tools (a todo
 script exists now). Scripting gaps: functions, case, < redirection, while read.
+
+Proxmox + releases (2026-11-07): .github/workflows/iso.yml builds, boot-tests (serial log
+grep) and publishes dream.iso + .sha256 as the rolling `latest` release. tools/proxmox/
+dreamos-vm.sh (run as root on the PVE host) downloads it into ISO storage as dreamos.iso and
+`qm create`s: pc/seabios, 512M, 1 core, vga std, tablet 0, ide0 1G disk, ide2 cdrom, boot
+ide2;ide0, serial0 socket, args -machine vmport=on. `update` swaps the ISO only. Tested
+against mocked qm/pvesm/pvesh and with a Proxmox-like QEMU command line (Westmere+aes CPU),
+not on a real PVE host or under KVM. HorcruX (PVE host `horcrux`) is on Lynwood's LAN /
+Tailscale; cloud sessions can't reach it. Version is now 0.3 (sysinfo.version for apps).

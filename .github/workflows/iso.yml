@@ -1,0 +1,63 @@
+# Build dream.iso on every push to main, check that it boots, and publish it as
+# the "latest" release, so it can always be downloaded from
+#   https://github.com/Pneumatocyst/DreamOS/releases/download/latest/dream.iso
+# (tools/proxmox/dreamos-vm.sh fetches it from there).
+name: iso
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iso
+  cancel-in-progress: true
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xorriso qemu-system-x86
+
+      - name: Install Limine
+        run: |
+          git clone --depth 1 --branch v9.x-binary https://github.com/limine-bootloader/limine.git "$RUNNER_TEMP/limine"
+          make -C "$RUNNER_TEMP/limine"
+          sudo install -m 755 "$RUNNER_TEMP/limine/limine" /usr/local/bin/limine
+          sudo mkdir -p /usr/share/limine
+          cd "$RUNNER_TEMP/limine"
+          sudo cp limine-bios.sys limine-bios-cd.bin limine-uefi-cd.bin BOOTX64.EFI /usr/share/limine/
+
+      - name: Build
+        run: make -j"$(nproc)"
+
+      - name: Boot it and check the log
+        run: |
+          truncate -s 64M "$RUNNER_TEMP/disk.img"
+          timeout 40 qemu-system-x86_64 -machine pc,vmport=on -m 512 -vga std -display none \
+            -drive file="$RUNNER_TEMP/disk.img",format=raw,if=ide,index=0 \
+            -drive file=dream.iso,media=cdrom,if=ide,index=2 -boot order=dc \
+            -serial file:serial.log -no-reboot || true
+          cat serial.log
+          grep -q "programs and scripts in /bin" serial.log
+          grep -q "starting the desktop" serial.log
+          ! grep -qi "panic" serial.log
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum dream.iso > dream.iso.sha256
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dream.iso dream.iso.sha256 \
+            --title "latest build" \
+            --notes "dream.iso built from ${GITHUB_SHA::7} ($(git log -1 --format=%s)). Boot it in QEMU (make run) or on Proxmox (tools/proxmox/dreamos-vm.sh)." \
+            --target "$GITHUB_SHA" --latest

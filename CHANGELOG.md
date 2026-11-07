@@ -1,6 +1,12 @@
 # Changelog
 
-## unreleased
+## 0.3: apps in user space, scripts (2026-11-07)
+
+- **Ready-made ISO**: GitHub Actions builds `dream.iso` on every push to `main`, boots it
+  to check it, and publishes it as the `latest` release.
+- **Proxmox**: `tools/proxmox/dreamos-vm.sh` creates a DreamOS VM (and `update` fetches the
+  newest ISO). See docs/PROXMOX.md.
+- The settings app reads the version from the kernel instead of having its own copy.
 
 - **Shell scripts** ([docs/SCRIPTING.md](docs/SCRIPTING.md)): variables (`$x`, `${x}`, `$1`,
   `$#`, `$@`, `$?`, `$RANDOM`...), `$((arithmetic))`, `$(command)` substitution,

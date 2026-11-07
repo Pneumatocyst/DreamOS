@@ -60,6 +60,7 @@ struct sysinfo {
     char     theme[16], hostname[32];
     uint16_t year;                     /* the clock (local time) */
     uint8_t  mon, day, hour, min, sec, weekday;   /* weekday 0 = sunday */
+    char     version[12];              /* dream's version, e.g. "0.3" */
 };
 struct task_entry {
     int32_t  id;

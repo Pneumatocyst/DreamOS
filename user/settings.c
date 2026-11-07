@@ -175,7 +175,9 @@ static void page_about(void) {
     draw_circle(lx, ly, 34, acc);
     draw_circle(lx + 14, ly - 12, 30, mix(acc, bg, 200));
     draw_text(FONT_BIG, CX + 124, 40, "dream", C(UI_TEXT));
-    draw_text(FONT_UI, CX + 126, 88, "version 0.2, x86_64. a small OS for learning.", C(UI_DIM));
+    char ver[64];
+    snprintf(ver, sizeof ver, "version %s, x86_64. a small OS for learning.", si.version);
+    draw_text(FONT_UI, CX + 126, 88, ver, C(UI_DIM));
 
     char brand[49], mem[48], disp[48], upt[48], tsk[64];
     cpu_brand(brand);
@@ -211,7 +213,9 @@ static void draw(void) {
         draw_glyph(page_glyphs[i], 24, y + 9, 16, i == page ? C(UI_TEXT) : C(UI_DIM));
         draw_text(i == page ? FONT_BOLD : FONT_UI, 52, y + 8, page_names[i], i == page ? C(UI_TEXT) : C(UI_DIM));
     }
-    draw_text(FONT_SMALL, 20, H - 30, "dream 0.2", C(UI_DIM));
+    char ver[24];
+    snprintf(ver, sizeof ver, "dream %s", si.version);
+    draw_text(FONT_SMALL, 20, H - 30, ver, C(UI_DIM));
     nhot = 0;
     if (page == PAGE_LOOK) page_look();
     else if (page == PAGE_DESKTOP) page_desktop();

@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
-#define DREAM_VERSION "0.2"
+#define DREAM_VERSION "0.3"
 
 struct regs;
 

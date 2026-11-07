@@ -107,6 +107,7 @@ uint64_t sys_sysinfo(struct process *p, uint64_t out) {
     si.year = t.year; si.mon = t.mon; si.day = t.day;
     si.hour = t.hour; si.min = t.min; si.sec = t.sec;
     si.weekday = rtc_weekday(&t);
+    strlcpy(si.version, DREAM_VERSION, sizeof si.version);
     memcpy((void *)out, &si, sizeof si);
     return 0;
 }
